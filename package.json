@@ -1,0 +1,29 @@
+{
+  "name": "iris",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VatsalP117/iris.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/VatsalP117/iris/issues"
+  },
+  "homepage": "https://github.com/VatsalP117/iris#readme",
+  "dependencies": {
+    "pnpm": "^10.28.2"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.8",
+    "biome": "^0.3.3",
+    "turbo": "^2.7.6"
+  }
+}

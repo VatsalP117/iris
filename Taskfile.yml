@@ -1,0 +1,29 @@
+version: '3'
+
+tasks:
+  default:
+    cmds:
+      - task: build
+
+  dev:backend:
+    dir: cmd/server
+    cmds:
+      - go run main.go
+
+  build:backend:
+    cmds:
+      - mkdir -p dist
+      - go build -o dist/iris-server ./cmd/server
+
+  install:js:
+    cmds:
+      - pnpm install
+
+  build:js:
+    cmds:
+      - pnpm --filter @iris/web build
+      - pnpm --filter @iris/dashboard build
+
+
+  build:
+    deps: [build:backend, build:js]
