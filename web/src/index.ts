@@ -1,6 +1,7 @@
 import { IrisConfig, EventPayload } from "./config";
 import { Transport } from "./transport";
 import { initAutoCapture } from "./autocapture";
+import { initVitals } from "./vitals";
 
 export class Iris {
   private transport: Transport;
@@ -22,6 +23,7 @@ export class Iris {
     if (this.config.autocapture) {
       initAutoCapture(this.track.bind(this));
     }
+    initVitals(this.track.bind(this));
   }
 
   public track(name: string, props?: object) {
