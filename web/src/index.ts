@@ -46,6 +46,10 @@ export class Iris {
     this.track("$pageview");
   }
 
+  private handlePopState = () => {
+    this.trackPageview();
+  };
+
   private enableHistoryPatch() {
     const originalPushState = history.pushState;
     history.pushState = (...args) => {
@@ -53,8 +57,13 @@ export class Iris {
       this.trackPageview();
     };
 
-    window.addEventListener("popstate", () => {
-      this.trackPageview();
-    });
+    window.addEventListener("popstate", this.handlePopState);
+  }
+
+  public stop() {
+    window.removeEventListener("popstate", this.handlePopState);
+    // Note: restoring the original pushState is complex because other libraries
+    // (like Next.js/React Router) might also patch it. We leave it patched 
+    // but the popstate listener is cleanly removed.
   }
 }
