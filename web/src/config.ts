@@ -6,10 +6,13 @@ export interface IrisConfig {
 }
 
 export type EventPayload = {
-  n: string;
-  u: string;
-  d: string;
-  r: string | null;
-  w: number;
-  p?: Record<string, any>;
+  n: string;    // event name
+  u: string;    // URL
+  d: string;    // domain
+  r: string | null; // referrer
+  w: number;    // screen width
+  s: string;    // site ID
+  sid: string;  // session ID
+  vid: string;  // visitor ID (anonymous)
+  p?: Record<string, any>; // custom properties
 };

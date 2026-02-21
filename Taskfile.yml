@@ -10,6 +10,11 @@ tasks:
     cmds:
       - go run main.go
 
+  dev:dashboard:
+    dir: dashboard
+    cmds:
+      - pnpm dev
+
   build:backend:
     cmds:
       - mkdir -p dist
@@ -21,9 +26,8 @@ tasks:
 
   build:js:
     cmds:
-      - pnpm --filter @iris/web build
+      - pnpm --filter @bigchill101/iris build
       - pnpm --filter @iris/dashboard build
-
 
   build:
     deps: [build:backend, build:js]

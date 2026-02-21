@@ -21,16 +21,21 @@ func NewSqliteDB(filepath string) (*SqliteRepository, error) {
 
 	query := `
 	CREATE TABLE IF NOT EXISTS events (
-		id TEXT PRIMARY KEY,
-		event_name TEXT,
-		url TEXT,
-		domain TEXT,
-		referrer TEXT,
+		id          TEXT PRIMARY KEY,
+		event_name  TEXT,
+		url         TEXT,
+		domain      TEXT,
+		referrer    TEXT,
 		screen_width INTEGER,
-		session_id TEXT,
-		properties TEXT,
-		timestamp DATETIME
+		site_id     TEXT,
+		session_id  TEXT,
+		visitor_id  TEXT,
+		properties  TEXT,
+		timestamp   DATETIME
 	);
+	CREATE INDEX IF NOT EXISTS idx_events_domain    ON events(domain);
+	CREATE INDEX IF NOT EXISTS idx_events_site_id   ON events(site_id);
+	CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
 	`
 	_, err = db.Exec(query)
 	if err != nil {
@@ -47,8 +52,8 @@ func (r *SqliteRepository) Insert(ctx context.Context, e *core.Event) error {
 	}
 
 	query := `
-	INSERT INTO events (id, event_name, url, domain, referrer, screen_width, session_id, properties, timestamp)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO events (id, event_name, url, domain, referrer, screen_width, site_id, session_id, visitor_id, properties, timestamp)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err = r.db.ExecContext(ctx, query,
@@ -58,8 +63,10 @@ func (r *SqliteRepository) Insert(ctx context.Context, e *core.Event) error {
 		e.Domain,
 		e.Referrer,
 		e.ScreenWidth,
+		e.SiteID,
 		e.SessionID,
-		string(propsJson), 
+		e.VisitorID,
+		string(propsJson),
 		e.Timestamp,
 	)
 

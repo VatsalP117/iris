@@ -2,6 +2,7 @@ import { IrisConfig, EventPayload } from "./config";
 import { Transport } from "./transport";
 import { initAutoCapture } from "./autocapture";
 import { initVitals } from "./vitals";
+import { getVisitorId, getSessionId } from "./storage";
 
 export class Iris {
   private transport: Transport;
@@ -33,7 +34,10 @@ export class Iris {
       d: window.location.hostname,
       r: document.referrer || null,
       w: window.innerWidth,
-      p: props,
+      s: this.config.siteId,
+      sid: getSessionId(),
+      vid: getVisitorId(),
+      p: props as Record<string, any> | undefined,
     };
     this.transport.send(payload);
   }
