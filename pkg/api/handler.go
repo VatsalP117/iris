@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -49,6 +50,7 @@ func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {
 
 	var event core.Event
 	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
+		log.Printf("[TrackEvent] JSON decode error: %v", err)
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
@@ -57,9 +59,12 @@ func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {
 	event.Timestamp = time.Now().UTC()
 
 	if err := h.Repo.Insert(r.Context(), &event); err != nil {
+		log.Printf("[TrackEvent] DB Insert error: %v", err)
 		http.Error(w, "Failed to save event", http.StatusInternalServerError)
 		return
 	}
+
+	log.Printf("[TrackEvent] OK Event received: %s (domain=%s, site=%s, url=%s)", event.EventName, event.Domain, event.SiteID, event.URL)
 
 	w.WriteHeader(http.StatusAccepted)
 }
