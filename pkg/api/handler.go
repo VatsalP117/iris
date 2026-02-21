@@ -58,6 +58,10 @@ func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {
 	event.ID = uuid.NewString()
 	event.Timestamp = time.Now().UTC()
 
+	if event.Properties != nil {
+		truncateStrings(event.Properties, 200)
+	}
+
 	if err := h.Repo.Insert(r.Context(), &event); err != nil {
 		log.Printf("[TrackEvent] DB Insert error: %v", err)
 		http.Error(w, "Failed to save event", http.StatusInternalServerError)
@@ -182,4 +186,26 @@ func (h *Handler) GetTimeSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// Recursively walks through JSON objects/arrays and truncates long strings
+func truncateStrings(data any, maxLen int) {
+	switch v := data.(type) {
+	case map[string]any:
+		for key, val := range v {
+			if str, ok := val.(string); ok && len(str) > maxLen {
+				v[key] = str[:maxLen] + "..."
+			} else {
+				truncateStrings(val, maxLen)
+			}
+		}
+	case []any:
+		for i, val := range v {
+			if str, ok := val.(string); ok && len(str) > maxLen {
+				v[i] = str[:maxLen] + "..."
+			} else {
+				truncateStrings(val, maxLen)
+			}
+		}
+	}
 }

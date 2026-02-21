@@ -21,7 +21,7 @@ func (r *SqliteRepository) GetStats(ctx context.Context, domain, from, to string
 	WHERE event_name = '$pageview'
 	  AND domain = ?
 	  AND (? = '' OR timestamp >= ?)
-	  AND (? = '' OR timestamp <= ?)
+	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
 	`
 	row := r.db.QueryRowContext(ctx, query, domain, from, from, to, to)
 
@@ -39,7 +39,7 @@ func (r *SqliteRepository) GetTopPages(ctx context.Context, domain, from, to str
 	WHERE event_name = '$pageview'
 	  AND domain = ?
 	  AND (? = '' OR timestamp >= ?)
-	  AND (? = '' OR timestamp <= ?)
+	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
 	GROUP BY url
 	ORDER BY pageviews DESC
 	LIMIT ?
@@ -69,7 +69,7 @@ func (r *SqliteRepository) GetTopReferrers(ctx context.Context, domain, from, to
 	  AND domain = ?
 	  AND referrer != ''
 	  AND (? = '' OR timestamp >= ?)
-	  AND (? = '' OR timestamp <= ?)
+	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
 	GROUP BY referrer
 	ORDER BY visitors DESC
 	LIMIT ?
@@ -102,7 +102,7 @@ func (r *SqliteRepository) GetVitals(ctx context.Context, domain, from, to strin
 	WHERE event_name = '$web_vital'
 	  AND domain = ?
 	  AND (? = '' OR timestamp >= ?)
-	  AND (? = '' OR timestamp <= ?)
+	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
 	GROUP BY name
 	`
 	rows, err := r.db.QueryContext(ctx, query, domain, from, from, to, to)
@@ -132,7 +132,7 @@ func (r *SqliteRepository) GetPageviewsTimeSeries(ctx context.Context, domain, f
 	WHERE event_name = '$pageview'
 	  AND domain = ?
 	  AND (? = '' OR timestamp >= ?)
-	  AND (? = '' OR timestamp <= ?)
+	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
 	GROUP BY day
 	ORDER BY day ASC
 	`
@@ -166,7 +166,7 @@ func (r *SqliteRepository) GetDevices(ctx context.Context, domain, from, to stri
 	FROM events
 	WHERE domain = ?
 	  AND (? = '' OR timestamp >= ?)
-	  AND (? = '' OR timestamp <= ?)
+	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
 	GROUP BY device
 	ORDER BY count DESC
 	`
