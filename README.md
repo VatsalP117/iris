@@ -22,11 +22,11 @@ docker compose up -d
 ```
 
 The server will automatically:
-1. Spin up the backend API on `http://localhost:8080`.
+1. Spin up the backend API on `http://localhost:8081`.
 2. Serve the built React Dashboard on the root URL `/`.
 3. Create a SQLite database in `./data/iris.db` (persistent).
 
-**View Dashboard:** Open `http://localhost:8080/`
+**View Dashboard:** Open `http://localhost:8081/`
 
 ---
 
