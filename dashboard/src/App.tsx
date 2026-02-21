@@ -18,9 +18,12 @@ function fmtDate(d: Date): string {
     return format(d, "yyyy-MM-dd");
 }
 
+type Tab = "overview" | "pages" | "referrers" | "vitals" | "devices";
+
 export default function App() {
     const [domain, setDomain] = useState("");
     const [domainInput, setDomainInput] = useState("");
+    const [activeTab, setActiveTab] = useState<Tab>("overview");
     const [preset, setPreset] = useState(30);
     const [from, setFrom] = useState<Date>(() => subDays(new Date(), 30));
     const [to] = useState<Date>(new Date());
@@ -91,11 +94,11 @@ export default function App() {
 
                 <span className="sidebar-section-label">Navigation</span>
 
-                <SidebarItem icon="📊" label="Overview" active />
-                <SidebarItem icon="📄" label="Pages" />
-                <SidebarItem icon="🔗" label="Referrers" />
-                <SidebarItem icon="⚡" label="Web Vitals" />
-                <SidebarItem icon="📱" label="Devices" />
+                <SidebarItem icon="📊" label="Overview" active={activeTab === "overview"} onClick={() => setActiveTab("overview")} />
+                <SidebarItem icon="📄" label="Pages" active={activeTab === "pages"} onClick={() => setActiveTab("pages")} />
+                <SidebarItem icon="🔗" label="Referrers" active={activeTab === "referrers"} onClick={() => setActiveTab("referrers")} />
+                <SidebarItem icon="⚡" label="Web Vitals" active={activeTab === "vitals"} onClick={() => setActiveTab("vitals")} />
+                <SidebarItem icon="📱" label="Devices" active={activeTab === "devices"} onClick={() => setActiveTab("devices")} />
 
                 <div style={{ flex: 1 }} />
 
@@ -191,18 +194,44 @@ export default function App() {
                         <>
                             <StatsCards stats={stats} loading={loading} />
 
-                            <div className="dashboard-grid">
-                                <PageviewsChart
-                                    data={chartData.length ? chartData : emptyBuckets}
-                                    loading={loading}
-                                    from={from}
-                                    to={to}
-                                />
-                                <TopPages pages={pages} loading={loading} />
-                                <TopReferrers referrers={referrers} loading={loading} />
-                                <WebVitals vitals={vitals} loading={loading} />
-                                <DeviceBreakdown devices={devices} loading={loading} />
-                            </div>
+                            {activeTab === "overview" && (
+                                <div className="dashboard-grid">
+                                    <PageviewsChart
+                                        data={chartData.length ? chartData : emptyBuckets}
+                                        loading={loading}
+                                        from={from}
+                                        to={to}
+                                    />
+                                    <TopPages pages={pages} loading={loading} />
+                                    <TopReferrers referrers={referrers} loading={loading} />
+                                    <WebVitals vitals={vitals} loading={loading} />
+                                    <DeviceBreakdown devices={devices} loading={loading} />
+                                </div>
+                            )}
+
+                            {activeTab === "pages" && (
+                                <div style={{ marginTop: 24, maxWidth: 800 }}>
+                                    <TopPages pages={pages} loading={loading} />
+                                </div>
+                            )}
+
+                            {activeTab === "referrers" && (
+                                <div style={{ marginTop: 24, maxWidth: 800 }}>
+                                    <TopReferrers referrers={referrers} loading={loading} />
+                                </div>
+                            )}
+
+                            {activeTab === "vitals" && (
+                                <div style={{ marginTop: 24, maxWidth: 800 }}>
+                                    <WebVitals vitals={vitals} loading={loading} />
+                                </div>
+                            )}
+
+                            {activeTab === "devices" && (
+                                <div style={{ marginTop: 24, maxWidth: 800 }}>
+                                    <DeviceBreakdown devices={devices} loading={loading} />
+                                </div>
+                            )}
                         </>
                     )}
                 </main>
@@ -215,13 +244,16 @@ function SidebarItem({
     icon,
     label,
     active = false,
+    onClick,
 }: {
     icon: string;
     label: string;
     active?: boolean;
+    onClick?: () => void;
 }) {
     return (
         <button
+            onClick={onClick}
             style={{
                 display: "flex",
                 alignItems: "center",
