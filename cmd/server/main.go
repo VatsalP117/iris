@@ -33,6 +33,7 @@ func main() {
 	http.HandleFunc("/api/vitals", handler.GetVitals)
 	http.HandleFunc("/api/devices", handler.GetDevices)
 	http.HandleFunc("/api/timeseries", handler.GetTimeSeries)
+	http.HandleFunc("/api/sites", handler.ListSites)
 
 	// Serve dashboard static files
 	dashboardDir := getEnv("DASHBOARD_DIR", "./dashboard/dist")

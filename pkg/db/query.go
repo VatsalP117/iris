@@ -186,3 +186,27 @@ func (r *SqliteRepository) GetDevices(ctx context.Context, domain, from, to stri
 	}
 	return results, rows.Err()
 }
+
+func (r *SqliteRepository) GetSites(ctx context.Context) ([]core.SiteStat, error) {
+	query := `
+	SELECT DISTINCT site_id, domain
+	FROM events
+	WHERE site_id != ''
+	ORDER BY domain ASC
+	`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []core.SiteStat
+	for rows.Next() {
+		var s core.SiteStat
+		if err := rows.Scan(&s.SiteID, &s.Domain); err != nil {
+			return nil, err
+		}
+		results = append(results, s)
+	}
+	return results, rows.Err()
+}

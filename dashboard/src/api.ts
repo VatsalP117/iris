@@ -29,6 +29,11 @@ export interface DeviceStat {
     count: number;
 }
 
+export interface SiteStat {
+    site_id: string;
+    domain: string;
+}
+
 function buildParams(domain: string, from: string, to: string) {
     const p = new URLSearchParams({ domain });
     if (from) p.set("from", from);
@@ -60,4 +65,7 @@ export const api = {
 
     timeseries: (domain: string, from: string, to: string) =>
         get<{ date: string; pageviews: number }[]>(`/api/timeseries?${buildParams(domain, from, to)}`),
+
+    sites: () =>
+        get<SiteStat[]>(`/api/sites`),
 };

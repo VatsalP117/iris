@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { format, subDays } from "date-fns";
-import { api, StatsResult, PageStat, ReferrerStat, VitalStat, DeviceStat } from "./api";
+import { api, StatsResult, PageStat, ReferrerStat, VitalStat, DeviceStat, SiteStat } from "./api";
 import { StatsCards } from "./components/StatsCards";
 import { TopPages } from "./components/TopPages";
 import { TopReferrers } from "./components/TopReferrers";
@@ -21,8 +21,10 @@ function fmtDate(d: Date): string {
 type Tab = "overview" | "pages" | "referrers" | "vitals" | "devices";
 
 export default function App() {
-    const [domain, setDomain] = useState("");
-    const [domainInput, setDomainInput] = useState("");
+    const [sites, setSites] = useState<SiteStat[]>([]);
+    const [sitesLoading, setSitesLoading] = useState(true);
+    const [selectedSite, setSelectedSite] = useState<SiteStat | null>(null);
+
     const [activeTab, setActiveTab] = useState<Tab>("overview");
     const [preset, setPreset] = useState(30);
     const [from, setFrom] = useState<Date>(() => subDays(new Date(), 30));
@@ -39,17 +41,29 @@ export default function App() {
     const fromStr = fmtDate(from);
     const toStr = fmtDate(to);
 
-    const fetchAll = useCallback(async (d: string) => {
-        if (!d) return;
+    // Fetch available sites on mount and auto-select first
+    useEffect(() => {
+        setSitesLoading(true);
+        api.sites()
+            .then((list) => {
+                setSites(list ?? []);
+                if (list && list.length > 0) setSelectedSite(list[0]);
+            })
+            .catch((err) => console.error("Iris: failed to fetch sites", err))
+            .finally(() => setSitesLoading(false));
+    }, []);
+
+    const fetchAll = useCallback(async (domain: string) => {
+        if (!domain) return;
         setLoading(true);
         try {
             const [s, p, r, v, dev, ts] = await Promise.all([
-                api.stats(d, fromStr, toStr),
-                api.pages(d, fromStr, toStr),
-                api.referrers(d, fromStr, toStr),
-                api.vitals(d, fromStr, toStr),
-                api.devices(d, fromStr, toStr),
-                api.timeseries(d, fromStr, toStr),
+                api.stats(domain, fromStr, toStr),
+                api.pages(domain, fromStr, toStr),
+                api.referrers(domain, fromStr, toStr),
+                api.vitals(domain, fromStr, toStr),
+                api.devices(domain, fromStr, toStr),
+                api.timeseries(domain, fromStr, toStr),
             ]);
             setStats(s);
             setPages(p ?? []);
@@ -65,21 +79,28 @@ export default function App() {
     }, [fromStr, toStr]);
 
     useEffect(() => {
-        if (domain) fetchAll(domain);
-    }, [domain, fetchAll]);
+        if (selectedSite) fetchAll(selectedSite.domain);
+    }, [selectedSite, fetchAll]);
 
     function handlePreset(days: number) {
         setPreset(days);
         setFrom(subDays(new Date(), days));
     }
 
-    function handleDomainSubmit(e: React.FormEvent) {
-        e.preventDefault();
-        const d = domainInput.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-        if (d) setDomain(d);
+    function handleSiteChange(e: React.ChangeEvent<HTMLSelectElement>) {
+        const site = sites.find((s) => s.site_id === e.target.value) ?? null;
+        setSelectedSite(site);
+        // Reset data so stale values don't flash
+        setStats(null);
+        setPages([]);
+        setReferrers([]);
+        setVitals([]);
+        setDevices([]);
+        setChartData([]);
     }
 
     const emptyBuckets = buildEmptyBuckets(from, to);
+    const domain = selectedSite?.domain ?? "";
 
     return (
         <div className="app-layout">
@@ -129,26 +150,42 @@ export default function App() {
                             <span className="domain-badge">{domain}</span>
                         ) : (
                             <span className="topbar-title" style={{ color: "var(--text-muted)" }}>
-                                No site selected
+                                {sitesLoading ? "Loading sites…" : "No sites found"}
                             </span>
                         )}
                     </div>
 
                     <div className="topbar-right">
-                        {/* Domain input */}
-                        <form onSubmit={handleDomainSubmit} style={{ display: "flex", gap: 6 }}>
-                            <input
+                        {/* Site picker */}
+                        {!sitesLoading && sites.length > 0 && (
+                            <select
                                 className="input"
-                                placeholder="example.com"
-                                value={domainInput}
-                                onChange={(e) => setDomainInput(e.target.value)}
-                                style={{ width: 180 }}
-                                id="domain-input"
-                            />
-                            <button type="submit" className="btn btn-primary" id="domain-submit">
-                                Analyse
+                                value={selectedSite?.site_id ?? ""}
+                                onChange={handleSiteChange}
+                                id="site-picker"
+                                style={{ minWidth: 200 }}
+                            >
+                                {sites.map((s) => (
+                                    <option key={s.site_id} value={s.site_id}>
+                                        {s.domain}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+
+                        {/* Refresh */}
+                        {selectedSite && (
+                            <button
+                                className="btn btn-ghost"
+                                id="refresh-btn"
+                                onClick={() => fetchAll(selectedSite.domain)}
+                                disabled={loading}
+                                title="Refresh data"
+                                style={{ fontSize: 15, transition: "transform 0.4s", transform: loading ? "rotate(360deg)" : "none" }}
+                            >
+                                ↻
                             </button>
-                        </form>
+                        )}
 
                         {/* Date presets */}
                         <div className="date-range-group">
@@ -168,29 +205,29 @@ export default function App() {
 
                 {/* Page content */}
                 <main className="page-content">
-                    {!domain && (
-                        <div
-                            style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flex: 1,
-                                gap: 16,
-                                color: "var(--text-muted)",
-                            }}
-                        >
+                    {/* Empty / loading states */}
+                    {sitesLoading && (
+                        <div style={centeredStyle}>
                             <div style={{ fontSize: 48 }}>👁</div>
                             <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text-secondary)" }}>
-                                Enter a domain to get started
-                            </div>
-                            <div style={{ fontSize: 13 }}>
-                                Type your site's domain in the input above and click Analyse
+                                Loading sites…
                             </div>
                         </div>
                     )}
 
-                    {domain && (
+                    {!sitesLoading && sites.length === 0 && (
+                        <div style={centeredStyle}>
+                            <div style={{ fontSize: 48 }}>📭</div>
+                            <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text-secondary)" }}>
+                                No data yet
+                            </div>
+                            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                                Install the Iris SDK on your site to start collecting analytics.
+                            </div>
+                        </div>
+                    )}
+
+                    {!sitesLoading && selectedSite && (
                         <>
                             <StatsCards stats={stats} loading={loading} />
 
@@ -239,6 +276,16 @@ export default function App() {
         </div>
     );
 }
+
+const centeredStyle: React.CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    flex: 1,
+    gap: 16,
+    color: "var(--text-muted)",
+};
 
 function SidebarItem({
     icon,

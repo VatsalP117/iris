@@ -188,6 +188,19 @@ func (h *Handler) GetTimeSeries(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// GET /api/sites
+func (h *Handler) ListSites(w http.ResponseWriter, r *http.Request) {
+	if setCORSHeaders(w, r) {
+		return
+	}
+	result, err := h.Repo.GetSites(r.Context())
+	if err != nil {
+		http.Error(w, "Query failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 // Recursively walks through JSON objects/arrays and truncates long strings
 func truncateStrings(data any, maxLen int) {
 	switch v := data.(type) {
