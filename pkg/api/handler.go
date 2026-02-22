@@ -18,22 +18,23 @@ func NewHandler(repo core.EventRepository) *Handler {
 	return &Handler{Repo: repo}
 }
 
-func setCORSHeaders(w http.ResponseWriter, r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-	if origin == "" {
-		origin = "*"
-	}
+func CORSMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			origin = "*"
+		}
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
-	w.Header().Set("Access-Control-Allow-Origin", origin)
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
-
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return true
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next(w, r)
 	}
-	return false
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
@@ -42,12 +43,23 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 	json.NewEncoder(w).Encode(data)
 }
 
-// POST /api/event
-func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {
-	if setCORSHeaders(w, r) {
-		return
-	}
+type statsQuery struct {
+	Domain string
+	From   string
+	To     string
+}
 
+func parseStatsQuery(w http.ResponseWriter, r *http.Request) (statsQuery, bool) {
+	q := r.URL.Query()
+	domain := q.Get("domain")
+	if domain == "" {
+		http.Error(w, "domain is required", http.StatusBadRequest)
+		return statsQuery{}, false
+	}
+	return statsQuery{Domain: domain, From: q.Get("from"), To: q.Get("to")}, true
+}
+
+func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {
 	var event core.Event
 	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
 		log.Printf("[TrackEvent] JSON decode error: %v", err)
@@ -68,23 +80,16 @@ func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[TrackEvent] OK Event received: %s (domain=%s, site=%s, url=%s)", event.EventName, event.Domain, event.SiteID, event.URL)
-
+	log.Printf("[TrackEvent] OK: %s (domain=%s, site=%s, url=%s)", event.EventName, event.Domain, event.SiteID, event.URL)
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// GET /api/stats?domain=&from=&to=
 func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
-	if setCORSHeaders(w, r) {
+	q, ok := parseStatsQuery(w, r)
+	if !ok {
 		return
 	}
-	q := r.URL.Query()
-	domain := q.Get("domain")
-	if domain == "" {
-		http.Error(w, "domain is required", http.StatusBadRequest)
-		return
-	}
-	result, err := h.Repo.GetStats(r.Context(), domain, q.Get("from"), q.Get("to"))
+	result, err := h.Repo.GetStats(r.Context(), q.Domain, q.From, q.To)
 	if err != nil {
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
@@ -92,19 +97,12 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-// GET /api/pages?domain=&from=&to=&limit=
 func (h *Handler) GetPages(w http.ResponseWriter, r *http.Request) {
-	if setCORSHeaders(w, r) {
+	q, ok := parseStatsQuery(w, r)
+	if !ok {
 		return
 	}
-	q := r.URL.Query()
-	domain := q.Get("domain")
-	if domain == "" {
-		http.Error(w, "domain is required", http.StatusBadRequest)
-		return
-	}
-	limit := 10
-	result, err := h.Repo.GetTopPages(r.Context(), domain, q.Get("from"), q.Get("to"), limit)
+	result, err := h.Repo.GetTopPages(r.Context(), q.Domain, q.From, q.To, 10)
 	if err != nil {
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
@@ -112,18 +110,12 @@ func (h *Handler) GetPages(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-// GET /api/referrers?domain=&from=&to=
 func (h *Handler) GetReferrers(w http.ResponseWriter, r *http.Request) {
-	if setCORSHeaders(w, r) {
+	q, ok := parseStatsQuery(w, r)
+	if !ok {
 		return
 	}
-	q := r.URL.Query()
-	domain := q.Get("domain")
-	if domain == "" {
-		http.Error(w, "domain is required", http.StatusBadRequest)
-		return
-	}
-	result, err := h.Repo.GetTopReferrers(r.Context(), domain, q.Get("from"), q.Get("to"), 10)
+	result, err := h.Repo.GetTopReferrers(r.Context(), q.Domain, q.From, q.To, 10)
 	if err != nil {
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
@@ -131,18 +123,12 @@ func (h *Handler) GetReferrers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-// GET /api/vitals?domain=&from=&to=
 func (h *Handler) GetVitals(w http.ResponseWriter, r *http.Request) {
-	if setCORSHeaders(w, r) {
+	q, ok := parseStatsQuery(w, r)
+	if !ok {
 		return
 	}
-	q := r.URL.Query()
-	domain := q.Get("domain")
-	if domain == "" {
-		http.Error(w, "domain is required", http.StatusBadRequest)
-		return
-	}
-	result, err := h.Repo.GetVitals(r.Context(), domain, q.Get("from"), q.Get("to"))
+	result, err := h.Repo.GetVitals(r.Context(), q.Domain, q.From, q.To)
 	if err != nil {
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
@@ -150,18 +136,12 @@ func (h *Handler) GetVitals(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-// GET /api/devices?domain=&from=&to=
 func (h *Handler) GetDevices(w http.ResponseWriter, r *http.Request) {
-	if setCORSHeaders(w, r) {
+	q, ok := parseStatsQuery(w, r)
+	if !ok {
 		return
 	}
-	q := r.URL.Query()
-	domain := q.Get("domain")
-	if domain == "" {
-		http.Error(w, "domain is required", http.StatusBadRequest)
-		return
-	}
-	result, err := h.Repo.GetDevices(r.Context(), domain, q.Get("from"), q.Get("to"))
+	result, err := h.Repo.GetDevices(r.Context(), q.Domain, q.From, q.To)
 	if err != nil {
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
@@ -169,18 +149,12 @@ func (h *Handler) GetDevices(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-// GET /api/timeseries?domain=&from=&to=
 func (h *Handler) GetTimeSeries(w http.ResponseWriter, r *http.Request) {
-	if setCORSHeaders(w, r) {
+	q, ok := parseStatsQuery(w, r)
+	if !ok {
 		return
 	}
-	q := r.URL.Query()
-	domain := q.Get("domain")
-	if domain == "" {
-		http.Error(w, "domain is required", http.StatusBadRequest)
-		return
-	}
-	result, err := h.Repo.GetPageviewsTimeSeries(r.Context(), domain, q.Get("from"), q.Get("to"))
+	result, err := h.Repo.GetPageviewsTimeSeries(r.Context(), q.Domain, q.From, q.To)
 	if err != nil {
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
@@ -188,11 +162,7 @@ func (h *Handler) GetTimeSeries(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-// GET /api/sites
 func (h *Handler) ListSites(w http.ResponseWriter, r *http.Request) {
-	if setCORSHeaders(w, r) {
-		return
-	}
 	result, err := h.Repo.GetSites(r.Context())
 	if err != nil {
 		http.Error(w, "Query failed", http.StatusInternalServerError)
@@ -201,7 +171,6 @@ func (h *Handler) ListSites(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-// Recursively walks through JSON objects/arrays and truncates long strings
 func truncateStrings(data any, maxLen int) {
 	switch v := data.(type) {
 	case map[string]any:

@@ -23,19 +23,18 @@ func main() {
 
 	handler := api.NewHandler(sqliteRepo)
 
-	// Event ingestion
-	http.HandleFunc("/api/event", handler.TrackEvent)
+	cors := api.CORSMiddleware
 
-	// Dashboard query API
-	http.HandleFunc("/api/stats", handler.GetStats)
-	http.HandleFunc("/api/pages", handler.GetPages)
-	http.HandleFunc("/api/referrers", handler.GetReferrers)
-	http.HandleFunc("/api/vitals", handler.GetVitals)
-	http.HandleFunc("/api/devices", handler.GetDevices)
-	http.HandleFunc("/api/timeseries", handler.GetTimeSeries)
-	http.HandleFunc("/api/sites", handler.ListSites)
+	http.HandleFunc("/api/event", cors(handler.TrackEvent))
 
-	// Serve dashboard static files
+	http.HandleFunc("/api/stats", cors(handler.GetStats))
+	http.HandleFunc("/api/pages", cors(handler.GetPages))
+	http.HandleFunc("/api/referrers", cors(handler.GetReferrers))
+	http.HandleFunc("/api/vitals", cors(handler.GetVitals))
+	http.HandleFunc("/api/devices", cors(handler.GetDevices))
+	http.HandleFunc("/api/timeseries", cors(handler.GetTimeSeries))
+	http.HandleFunc("/api/sites", cors(handler.ListSites))
+
 	dashboardDir := getEnv("DASHBOARD_DIR", "./dashboard/dist")
 	fs := http.FileServer(http.Dir(dashboardDir))
 	http.Handle("/", fs)
