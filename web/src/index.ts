@@ -7,6 +7,8 @@ import { getVisitorId, getSessionId } from "./storage";
 export class Iris {
   private transport: Transport;
   private config: IrisConfig;
+  private isStarted = false;
+  private originalPushState: typeof history.pushState | null = null;
 
   constructor(config: IrisConfig) {
     this.config = {
@@ -18,6 +20,9 @@ export class Iris {
   }
 
   public start() {
+    if (this.isStarted) return;
+    this.isStarted = true;
+
     const ac = this.config.autocapture as AutocaptureConfig | false | undefined;
 
     if (ac && ac.pageviews !== false) {
@@ -56,20 +61,25 @@ export class Iris {
   };
 
   private enableHistoryPatch() {
-    const originalPushState = history.pushState;
-    history.pushState = (...args) => {
-      originalPushState.apply(history, args);
-      this.trackPageview();
+    this.originalPushState = history.pushState;
+    const self = this;
+    history.pushState = function (...args) {
+      self.originalPushState!.apply(history, args);
+      self.trackPageview();
     };
 
     window.addEventListener("popstate", this.handlePopState);
   }
 
   public stop() {
+    if (!this.isStarted) return;
+    this.isStarted = false;
+
+    if (this.originalPushState) {
+      history.pushState = this.originalPushState;
+      this.originalPushState = null;
+    }
     window.removeEventListener("popstate", this.handlePopState);
-    // Note: restoring the original pushState is complex because other libraries
-    // (like Next.js/React Router) might also patch it. We leave it patched
-    // but the popstate listener is cleanly removed.
   }
 }
 
