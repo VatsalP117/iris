@@ -35,3 +35,10 @@ tasks:
 
   build:
     deps: [build:backend, build:js]
+
+  publish:js:
+    desc: Build and publish the npm package
+    dir: web
+    cmds:
+      - pnpm build
+      - npm publish

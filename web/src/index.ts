@@ -4,6 +4,9 @@ import { initAutoCapture } from "./autocapture";
 import { initVitals } from "./vitals";
 import { getVisitorId, getSessionId } from "./storage";
 
+// Module-level guard — prevents multiple Iris instances from stacking pushState patches.
+let pushStatePatched = false;
+
 export class Iris {
   private transport: Transport;
   private config: IrisConfig;
@@ -25,14 +28,14 @@ export class Iris {
 
     const ac = this.config.autocapture as AutocaptureConfig | false | undefined;
 
-    if (ac && ac.pageviews !== false) {
+    if (ac && ac.pageviews === true) {
       this.trackPageview();
       this.enableHistoryPatch();
     }
-    if (ac && ac.clicks !== false) {
+    if (ac && ac.clicks === true) {
       initAutoCapture(this.track.bind(this));
     }
-    if (ac && ac.webvitals !== false) {
+    if (ac && ac.webvitals === true) {
       initVitals(this.track.bind(this));
     }
   }
@@ -61,13 +64,14 @@ export class Iris {
   };
 
   private enableHistoryPatch() {
+    if (pushStatePatched) return;
+    pushStatePatched = true;
     this.originalPushState = history.pushState;
     const self = this;
     history.pushState = function (...args) {
       self.originalPushState!.apply(history, args);
       self.trackPageview();
     };
-
     window.addEventListener("popstate", this.handlePopState);
   }
 
@@ -78,6 +82,7 @@ export class Iris {
     if (this.originalPushState) {
       history.pushState = this.originalPushState;
       this.originalPushState = null;
+      pushStatePatched = false;
     }
     window.removeEventListener("popstate", this.handlePopState);
   }
