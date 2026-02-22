@@ -1,7 +1,13 @@
+export interface AutocaptureConfig {
+  pageviews?: boolean;
+  webvitals?: boolean;
+  clicks?: boolean;
+}
+
 export interface IrisConfig {
   host: string;
   siteId: string;
-  autocapture?: boolean;
+  autocapture?: AutocaptureConfig | false;
   debug?: boolean;
 }
 

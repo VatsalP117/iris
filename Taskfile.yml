@@ -5,6 +5,10 @@ tasks:
     cmds:
       - task: build
 
+  dev:
+    desc: Run backend + dashboard dev server concurrently
+    deps: [dev:backend, dev:dashboard]
+
   dev:backend:
     dir: cmd/server
     cmds:

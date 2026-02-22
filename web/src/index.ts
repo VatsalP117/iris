@@ -1,4 +1,4 @@
-import { IrisConfig, EventPayload } from "./config";
+import { IrisConfig, AutocaptureConfig, EventPayload } from "./config";
 import { Transport } from "./transport";
 import { initAutoCapture } from "./autocapture";
 import { initVitals } from "./vitals";
@@ -10,7 +10,7 @@ export class Iris {
 
   constructor(config: IrisConfig) {
     this.config = {
-      autocapture: true,
+      autocapture: false,
       debug: false,
       ...config,
     };
@@ -18,13 +18,18 @@ export class Iris {
   }
 
   public start() {
-    this.trackPageview();
-    this.enableHistoryPatch();
+    const ac = this.config.autocapture as AutocaptureConfig | false | undefined;
 
-    if (this.config.autocapture) {
+    if (ac && ac.pageviews !== false) {
+      this.trackPageview();
+      this.enableHistoryPatch();
+    }
+    if (ac && ac.clicks !== false) {
       initAutoCapture(this.track.bind(this));
     }
-    initVitals(this.track.bind(this));
+    if (ac && ac.webvitals !== false) {
+      initVitals(this.track.bind(this));
+    }
   }
 
   public track(name: string, props?: object) {
@@ -63,7 +68,9 @@ export class Iris {
   public stop() {
     window.removeEventListener("popstate", this.handlePopState);
     // Note: restoring the original pushState is complex because other libraries
-    // (like Next.js/React Router) might also patch it. We leave it patched 
+    // (like Next.js/React Router) might also patch it. We leave it patched
     // but the popstate listener is cleanly removed.
   }
 }
+
+export type { AutocaptureConfig, IrisConfig };

@@ -1,6 +1,6 @@
 {
   "name": "@bigchill101/iris",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Privacy-first, self-hosted analytics client",
   "license": "MIT",
   "main": "./dist/index.js",
