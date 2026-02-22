@@ -189,9 +189,9 @@ func (r *SqliteRepository) GetDevices(ctx context.Context, domain, from, to stri
 
 func (r *SqliteRepository) GetSites(ctx context.Context) ([]core.SiteStat, error) {
 	query := `
-	SELECT DISTINCT site_id, domain
+	SELECT DISTINCT domain, COALESCE(NULLIF(site_id, ''), domain) AS effective_site_id
 	FROM events
-	WHERE site_id != ''
+	WHERE domain != ''
 	ORDER BY domain ASC
 	`
 	rows, err := r.db.QueryContext(ctx, query)
@@ -200,10 +200,10 @@ func (r *SqliteRepository) GetSites(ctx context.Context) ([]core.SiteStat, error
 	}
 	defer rows.Close()
 
-	var results []core.SiteStat
+	results := []core.SiteStat{}
 	for rows.Next() {
 		var s core.SiteStat
-		if err := rows.Scan(&s.SiteID, &s.Domain); err != nil {
+		if err := rows.Scan(&s.Domain, &s.SiteID); err != nil {
 			return nil, err
 		}
 		results = append(results, s)
