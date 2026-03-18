@@ -58,6 +58,7 @@ type TimeSeriesBucket struct {
 
 type EventRepository interface {
 	Insert(ctx context.Context, event *Event) error
+	InsertBatch(ctx context.Context, events []*Event) error
 	GetStats(ctx context.Context, domain, from, to string) (*StatsResult, error)
 	GetTopPages(ctx context.Context, domain, from, to string, limit int) ([]PageStat, error)
 	GetTopReferrers(ctx context.Context, domain, from, to string, limit int) ([]ReferrerStat, error)

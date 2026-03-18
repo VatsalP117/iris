@@ -69,6 +69,24 @@ const analytics = new Iris({
 analytics.start();
 ```
 
+### Event Batching (Optional)
+
+By default, each event fires an immediate HTTP request. You can enable **batching** to queue events and flush them in a single request — reducing network overhead for high-traffic pages.
+
+```typescript
+const analytics = new Iris({
+  host: "https://analytics.yourdomain.com",
+  siteId: "my-awesome-site",
+  batching: {
+    maxSize: 10,        // flush after 10 queued events (default: 10)
+    flushInterval: 5000, // flush every 5 seconds (default: 5000ms)
+    flushOnLeave: true,  // flush on tab switch / close (default: true)
+  },
+});
+
+analytics.start();
+```
+
 ### Manual Tracking (Custom Events)
 
 You can track custom events manually anywhere in your app:

@@ -84,6 +84,47 @@ func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
+const maxBatchSize = 50
+
+func (h *Handler) TrackBatchEvents(w http.ResponseWriter, r *http.Request) {
+	var events []core.Event
+	if err := json.NewDecoder(r.Body).Decode(&events); err != nil {
+		log.Printf("[TrackBatchEvents] JSON decode error: %v", err)
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if len(events) == 0 {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+
+	if len(events) > maxBatchSize {
+		http.Error(w, "Batch too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	now := time.Now().UTC()
+	ptrs := make([]*core.Event, len(events))
+	for i := range events {
+		events[i].ID = uuid.NewString()
+		events[i].Timestamp = now
+		if events[i].Properties != nil {
+			truncateStrings(events[i].Properties, 200)
+		}
+		ptrs[i] = &events[i]
+	}
+
+	if err := h.Repo.InsertBatch(r.Context(), ptrs); err != nil {
+		log.Printf("[TrackBatchEvents] DB InsertBatch error: %v", err)
+		http.Error(w, "Failed to save events", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[TrackBatchEvents] OK: %d events ingested", len(events))
+	w.WriteHeader(http.StatusAccepted)
+}
+
 func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	q, ok := parseStatsQuery(w, r)
 	if !ok {

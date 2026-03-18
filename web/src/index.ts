@@ -1,4 +1,4 @@
-import { IrisConfig, AutocaptureConfig, EventPayload } from "./config";
+import { IrisConfig, AutocaptureConfig, BatchConfig, EventPayload } from "./config";
 import { Transport } from "./transport";
 import { initAutoCapture } from "./autocapture";
 import { initVitals } from "./vitals";
@@ -79,6 +79,8 @@ export class Iris {
     if (!this.isStarted) return;
     this.isStarted = false;
 
+    this.transport.destroy();
+
     if (this.originalPushState) {
       history.pushState = this.originalPushState;
       this.originalPushState = null;
@@ -88,4 +90,4 @@ export class Iris {
   }
 }
 
-export type { AutocaptureConfig, IrisConfig };
+export type { AutocaptureConfig, BatchConfig, IrisConfig };

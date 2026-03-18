@@ -76,3 +76,46 @@ func (r *SqliteRepository) Insert(ctx context.Context, e *core.Event) error {
 func (r *SqliteRepository) Close() error {
 	return r.db.Close()
 }
+
+func (r *SqliteRepository) InsertBatch(ctx context.Context, events []*core.Event) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, `
+	INSERT INTO events (id, event_name, url, domain, referrer, screen_width, site_id, session_id, visitor_id, properties, timestamp)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, e := range events {
+		propsJson, err := json.Marshal(e.Properties)
+		if err != nil {
+			propsJson = []byte("{}")
+		}
+
+		_, err = stmt.ExecContext(ctx,
+			e.ID,
+			e.EventName,
+			e.URL,
+			e.Domain,
+			e.Referrer,
+			e.ScreenWidth,
+			e.SiteID,
+			e.SessionID,
+			e.VisitorID,
+			string(propsJson),
+			e.Timestamp,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}

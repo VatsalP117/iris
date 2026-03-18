@@ -286,7 +286,7 @@ Runs on `host:8081 → container:8080`. Mounts `./data:/app/data` for SQLite per
 
 4. **Autocapture is WIP** — the `autocapture.ts` comment explicitly flags this as "work in progress, still brainstorming".
 
-5. **No batching / queue in transport** — every single event fires an immediate HTTP request. High-frequency click events could cause many requests.
+5. **Event batching is opt-in** — by default every event fires immediately. Pass `batching: { maxSize, flushInterval, flushOnLeave }` in the config to queue events and flush them as a single `POST /api/events` request.
 
 6. **SQLite + CGO** — requires `gcc` at build time and is single-file, single-process. Not horizontally scalable, but appropriate for self-hosted / personal use.
 
@@ -306,4 +306,4 @@ Runs on `host:8081 → container:8080`. Mounts `./data:/app/data` for SQLite per
 | New analytics query | Add method to `EventRepository` interface in `core/event.go`, implement in `db/query.go`, add handler in `api/handler.go`, add fetch in `dashboard/src/api.ts` |
 | Swap SQLite for another DB | Write a new struct implementing `core.EventRepository` — handlers don't need changes |
 | Auth / API key protection | Add middleware in `cmd/server/main.go` before registering routes |
-| Batching / queue | Modify `web/src/transport.ts` — buffer events and flush periodically |
+| Batching / queue | Already implemented — configure `batching` in the SDK config. To customise flush behaviour, edit `web/src/transport.ts` |

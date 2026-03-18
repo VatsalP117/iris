@@ -26,6 +26,7 @@ func main() {
 	cors := api.CORSMiddleware
 
 	http.HandleFunc("/api/event", cors(handler.TrackEvent))
+	http.HandleFunc("/api/events", cors(handler.TrackBatchEvents))
 
 	http.HandleFunc("/api/stats", cors(handler.GetStats))
 	http.HandleFunc("/api/pages", cors(handler.GetPages))

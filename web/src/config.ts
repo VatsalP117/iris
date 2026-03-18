@@ -4,10 +4,20 @@ export interface AutocaptureConfig {
   clicks?: boolean;
 }
 
+export interface BatchConfig {
+  /** Max events to queue before flushing. Default: 10 */
+  maxSize?: number;
+  /** Flush interval in ms. Default: 5000 */
+  flushInterval?: number;
+  /** Flush remaining events on page hide / visibility change. Default: true */
+  flushOnLeave?: boolean;
+}
+
 export interface IrisConfig {
   host: string;
   siteId: string;
   autocapture?: AutocaptureConfig | false;
+  batching?: BatchConfig;
   debug?: boolean;
 }
 
