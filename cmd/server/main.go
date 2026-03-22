@@ -27,6 +27,9 @@ func main() {
 	ingestOrigins := getListEnv("IRIS_ALLOWED_INGEST_ORIGINS")
 	dashboardOrigins := getListEnv("IRIS_ALLOWED_DASHBOARD_ORIGINS")
 
+	log.Printf("Iris ingest CORS origins: %v", displayOriginConfig(ingestOrigins))
+	log.Printf("Iris dashboard CORS origins: %v", displayOriginConfig(dashboardOrigins))
+
 	ingestCORS := api.NewCORSMiddleware(api.CORSOptions{
 		AllowedOrigins: ingestOrigins,
 		AllowedMethods: []string{http.MethodPost, http.MethodOptions},
@@ -78,6 +81,13 @@ func getListEnv(key string) []string {
 			continue
 		}
 		values = append(values, value)
+	}
+	return values
+}
+
+func displayOriginConfig(values []string) []string {
+	if len(values) == 0 {
+		return []string{"*"}
 	}
 	return values
 }

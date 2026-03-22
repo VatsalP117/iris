@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -21,6 +22,7 @@ func NewCORSMiddleware(opts CORSOptions) func(http.HandlerFunc) http.HandlerFunc
 			if origin != "" {
 				normalizedOrigin, ok := normalizeOrigin(origin)
 				if !ok || (!allowAny && !originAllowed(allowedOrigins, normalizedOrigin)) {
+					log.Printf("[CORS] blocked method=%s path=%s origin=%q allow_any=%t allowed=%v", r.Method, r.URL.Path, origin, allowAny, opts.AllowedOrigins)
 					http.Error(w, "origin not allowed", http.StatusForbidden)
 					return
 				}
