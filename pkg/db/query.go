@@ -2,16 +2,24 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"math"
+	"net/url"
+	"sort"
+	"strings"
 
 	"github.com/VatsalP117/iris/pkg/core"
 )
 
 //
 // Helper to build WHERE clauses consistently.
-// All query methods accept domain, from, to as strings (ISO8601 dates or empty).
+// All query methods accept a site key plus from/to strings (ISO8601 dates or empty).
+// The site key can be the logical site_id or a legacy domain value.
 //
 
-func (r *SqliteRepository) GetStats(ctx context.Context, domain, from, to string) (*core.StatsResult, error) {
+const siteMatchClause = "(COALESCE(NULLIF(site_id, ''), domain) = ? OR domain = ?)"
+
+func (r *SqliteRepository) GetStats(ctx context.Context, siteKey, from, to string) (*core.StatsResult, error) {
 	query := `
 	SELECT
 		COUNT(*)                                          AS pageviews,
@@ -19,11 +27,11 @@ func (r *SqliteRepository) GetStats(ctx context.Context, domain, from, to string
 		COUNT(DISTINCT session_id)                        AS sessions
 	FROM events
 	WHERE event_name = '$pageview'
-	  AND domain = ?
+	  AND ` + siteMatchClause + `
 	  AND (? = '' OR timestamp >= ?)
 	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
 	`
-	row := r.db.QueryRowContext(ctx, query, domain, from, from, to, to)
+	row := r.db.QueryRowContext(ctx, query, siteKey, siteKey, from, from, to, to)
 
 	var res core.StatsResult
 	if err := row.Scan(&res.Pageviews, &res.UniqueVisitors, &res.Sessions); err != nil {
@@ -32,19 +40,19 @@ func (r *SqliteRepository) GetStats(ctx context.Context, domain, from, to string
 	return &res, nil
 }
 
-func (r *SqliteRepository) GetTopPages(ctx context.Context, domain, from, to string, limit int) ([]core.PageStat, error) {
+func (r *SqliteRepository) GetTopPages(ctx context.Context, siteKey, from, to string, limit int) ([]core.PageStat, error) {
 	query := `
 	SELECT url, COUNT(*) AS pageviews
 	FROM events
 	WHERE event_name = '$pageview'
-	  AND domain = ?
+	  AND ` + siteMatchClause + `
 	  AND (? = '' OR timestamp >= ?)
 	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
 	GROUP BY url
 	ORDER BY pageviews DESC
 	LIMIT ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, domain, from, from, to, to, limit)
+	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -61,82 +69,131 @@ func (r *SqliteRepository) GetTopPages(ctx context.Context, domain, from, to str
 	return results, rows.Err()
 }
 
-func (r *SqliteRepository) GetTopReferrers(ctx context.Context, domain, from, to string, limit int) ([]core.ReferrerStat, error) {
+func (r *SqliteRepository) GetTopReferrers(ctx context.Context, siteKey, from, to string, limit int) ([]core.ReferrerStat, error) {
 	query := `
-	SELECT referrer, COUNT(DISTINCT visitor_id) AS visitors
+	SELECT referrer, visitor_id
 	FROM events
 	WHERE event_name = '$pageview'
-	  AND domain = ?
+	  AND ` + siteMatchClause + `
 	  AND referrer != ''
 	  AND (? = '' OR timestamp >= ?)
 	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
-	GROUP BY referrer
-	ORDER BY visitors DESC
-	LIMIT ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, domain, from, from, to, to, limit)
+	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var results []core.ReferrerStat
+	visitorsByHost := map[string]map[string]struct{}{}
 	for rows.Next() {
-		var s core.ReferrerStat
-		if err := rows.Scan(&s.Referrer, &s.Visitors); err != nil {
+		var referrer string
+		var visitorID string
+		if err := rows.Scan(&referrer, &visitorID); err != nil {
 			return nil, err
 		}
-		results = append(results, s)
+
+		host := normalizeReferrer(referrer)
+		if host == "" {
+			continue
+		}
+		if visitorsByHost[host] == nil {
+			visitorsByHost[host] = map[string]struct{}{}
+		}
+		visitorsByHost[host][visitorID] = struct{}{}
 	}
-	return results, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	results := make([]core.ReferrerStat, 0, len(visitorsByHost))
+	for host, visitors := range visitorsByHost {
+		results = append(results, core.ReferrerStat{
+			Referrer: host,
+			Visitors: len(visitors),
+		})
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Visitors == results[j].Visitors {
+			return results[i].Referrer < results[j].Referrer
+		}
+		return results[i].Visitors > results[j].Visitors
+	})
+
+	if limit > 0 && len(results) > limit {
+		results = results[:limit]
+	}
+
+	return results, nil
 }
 
-func (r *SqliteRepository) GetVitals(ctx context.Context, domain, from, to string) ([]core.VitalStat, error) {
-	// Web vitals are stored as custom events with event_name = '$web_vital'
-	// properties JSON contains: $name (CLS/INP/LCP), $val (float)
+func (r *SqliteRepository) GetVitals(ctx context.Context, siteKey, from, to string) ([]core.VitalStat, error) {
 	query := `
 	SELECT
 		json_extract(properties, '$.$name') AS name,
-		AVG(CAST(json_extract(properties, '$.$val') AS REAL)) AS avg_value
+		CAST(json_extract(properties, '$.$val') AS REAL) AS value
 	FROM events
 	WHERE event_name = '$web_vital'
-	  AND domain = ?
+	  AND ` + siteMatchClause + `
 	  AND (? = '' OR timestamp >= ?)
 	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
-	GROUP BY name
 	`
-	rows, err := r.db.QueryContext(ctx, query, domain, from, from, to, to)
+	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var results []core.VitalStat
+	valuesByMetric := map[string][]float64{}
 	for rows.Next() {
-		var s core.VitalStat
-		if err := rows.Scan(&s.Name, &s.Value); err != nil {
+		var name sql.NullString
+		var value sql.NullFloat64
+		if err := rows.Scan(&name, &value); err != nil {
 			return nil, err
 		}
-		results = append(results, s)
+		if !name.Valid || !value.Valid {
+			continue
+		}
+		valuesByMetric[name.String] = append(valuesByMetric[name.String], value.Float64)
 	}
-	return results, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	names := make([]string, 0, len(valuesByMetric))
+	for name := range valuesByMetric {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	results := make([]core.VitalStat, 0, len(names))
+	for _, name := range names {
+		values := valuesByMetric[name]
+		sort.Float64s(values)
+		results = append(results, core.VitalStat{
+			Name:  name,
+			Value: percentile75(values),
+		})
+	}
+
+	return results, nil
 }
 
-func (r *SqliteRepository) GetPageviewsTimeSeries(ctx context.Context, domain, from, to string) ([]core.TimeSeriesBucket, error) {
-	// Group pageviews by calendar day (UTC) within the requested window.
+func (r *SqliteRepository) GetPageviewsTimeSeries(ctx context.Context, siteKey, from, to string) ([]core.TimeSeriesBucket, error) {
 	query := `
 	SELECT
 		strftime('%Y-%m-%d', timestamp) AS day,
 		COUNT(*)                        AS pageviews
 	FROM events
 	WHERE event_name = '$pageview'
-	  AND domain = ?
+	  AND ` + siteMatchClause + `
 	  AND (? = '' OR timestamp >= ?)
 	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
 	GROUP BY day
 	ORDER BY day ASC
 	`
-	rows, err := r.db.QueryContext(ctx, query, domain, from, from, to, to)
+	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to)
 	if err != nil {
 		return nil, err
 	}
@@ -153,8 +210,7 @@ func (r *SqliteRepository) GetPageviewsTimeSeries(ctx context.Context, domain, f
 	return results, rows.Err()
 }
 
-func (r *SqliteRepository) GetDevices(ctx context.Context, domain, from, to string) ([]core.DeviceStat, error) {
-	// Bucket screen widths into device categories
+func (r *SqliteRepository) GetDevices(ctx context.Context, siteKey, from, to string) ([]core.DeviceStat, error) {
 	query := `
 	SELECT
 		CASE
@@ -164,13 +220,14 @@ func (r *SqliteRepository) GetDevices(ctx context.Context, domain, from, to stri
 		END AS device,
 		COUNT(*) AS count
 	FROM events
-	WHERE domain = ?
+	WHERE event_name = '$pageview'
+	  AND ` + siteMatchClause + `
 	  AND (? = '' OR timestamp >= ?)
 	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
 	GROUP BY device
 	ORDER BY count DESC
 	`
-	rows, err := r.db.QueryContext(ctx, query, domain, from, from, to, to)
+	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to)
 	if err != nil {
 		return nil, err
 	}
@@ -189,10 +246,14 @@ func (r *SqliteRepository) GetDevices(ctx context.Context, domain, from, to stri
 
 func (r *SqliteRepository) GetSites(ctx context.Context) ([]core.SiteStat, error) {
 	query := `
-	SELECT DISTINCT domain, COALESCE(NULLIF(site_id, ''), domain) AS effective_site_id
+	SELECT
+		COALESCE(NULLIF(site_id, ''), domain) AS effective_site_id,
+		MIN(domain) AS primary_domain,
+		GROUP_CONCAT(DISTINCT domain) AS domains_csv
 	FROM events
 	WHERE domain != ''
-	ORDER BY domain ASC
+	GROUP BY effective_site_id
+	ORDER BY effective_site_id ASC
 	`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -203,10 +264,64 @@ func (r *SqliteRepository) GetSites(ctx context.Context) ([]core.SiteStat, error
 	results := []core.SiteStat{}
 	for rows.Next() {
 		var s core.SiteStat
-		if err := rows.Scan(&s.Domain, &s.SiteID); err != nil {
+		var domainsCSV string
+		if err := rows.Scan(&s.SiteID, &s.Domain, &domainsCSV); err != nil {
 			return nil, err
 		}
+		s.Domains = splitDomains(domainsCSV)
 		results = append(results, s)
 	}
 	return results, rows.Err()
+}
+
+func normalizeReferrer(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(raw)
+	if err == nil && parsed.Hostname() != "" {
+		return strings.TrimPrefix(strings.ToLower(parsed.Hostname()), "www.")
+	}
+
+	return strings.TrimPrefix(strings.ToLower(raw), "www.")
+}
+
+func percentile75(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+
+	index := int(math.Ceil(0.75*float64(len(values)))) - 1
+	if index < 0 {
+		index = 0
+	}
+	if index >= len(values) {
+		index = len(values) - 1
+	}
+	return values[index]
+}
+
+func splitDomains(csv string) []string {
+	if csv == "" {
+		return nil
+	}
+
+	parts := strings.Split(csv, ",")
+	domains := make([]string, 0, len(parts))
+	seen := map[string]struct{}{}
+	for _, part := range parts {
+		domain := strings.TrimSpace(part)
+		if domain == "" {
+			continue
+		}
+		if _, ok := seen[domain]; ok {
+			continue
+		}
+		seen[domain] = struct{}{}
+		domains = append(domains, domain)
+	}
+	sort.Strings(domains)
+	return domains
 }

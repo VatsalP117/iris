@@ -19,7 +19,7 @@ The entire system is packaged as a **single Docker container**. The Go binary se
 ```mermaid
 flowchart LR
     subgraph "Visitor Browser"
-        SDK["@bigchill101/iris\n(web/src/index.ts)"]
+        SDK["iris-analytics\n(web/src/index.ts)"]
         LS["localStorage\niris_vid"]
         SS["sessionStorage\niris_sid"]
     end
@@ -50,7 +50,7 @@ flowchart LR
 
 ## Layer 1: Client SDK (`web/`)
 
-**Package name:** `@bigchill101/iris` (v0.0.4)  
+**Package name:** `iris-analytics` (v0.1.0)  
 **Build:** `tsup` → outputs ESM + CJS + `.d.ts` to `web/dist/`
 
 ### Files
@@ -166,16 +166,16 @@ events (
 
 #### [pkg/db/query.go](file:///Users/vatsalpatel/Desktop/iris/pkg/db/query.go)
 All read queries. Each follows the same pattern:
-- Required filter: `domain = ?`
+- Required filter: logical `site_id` (with legacy `domain` fallback for older callers)
 - Optional date range: `(? = '' OR timestamp >= ?)` — passing an empty string skips the filter
 
 | Method | SQL logic |
 |---|---|
 | `GetStats` | `COUNT(*)` pageviews + `COUNT(DISTINCT visitor_id/session_id)` — only `$pageview` events |
 | `GetTopPages` | Group by `url`, order by count DESC, limit 10 |
-| `GetTopReferrers` | Group by `referrer`, count distinct visitors, exclude empty referrer |
-| `GetVitals` | `json_extract(properties, '$.$name')` + `AVG($.$val)` on `$web_vital` events |
-| `GetDevices` | CASE on `screen_width`: `<768` Mobile, `<1024` Tablet, else Desktop |
+| `GetTopReferrers` | Normalise referrer URLs to hostnames, then count distinct visitors per host |
+| `GetVitals` | Read raw vitals and compute P75 per metric (`LCP`, `INP`, `CLS`) |
+| `GetDevices` | CASE on `screen_width`, but only for `$pageview` events |
 | `GetPageviewsTimeSeries` | `strftime('%Y-%m-%d', timestamp)` group by day, order ASC |
 
 #### [pkg/api/handler.go](file:///Users/vatsalpatel/Desktop/iris/pkg/api/handler.go)
@@ -191,7 +191,7 @@ HTTP layer wiring `net/http` to the repository.
 3. Truncate long property strings
 4. Call `repo.Insert()`
 
-**Read endpoints** (all `GET`, all require `?domain=`):
+**Read endpoints** (all `GET`, all require `?site_id=`; `?domain=` is still accepted for legacy callers):
 ```
 /api/stats       → GetStats
 /api/pages       → GetTopPages
@@ -218,17 +218,17 @@ Bootstraps everything:
 **Key deps:** `recharts` (charts), `date-fns` (date math)
 
 ### State management
-All state lives in a single `App.tsx` component — no global store. `useCallback` + `useEffect` trigger `fetchAll()` whenever `domain` or the date range changes. All 6 API calls are parallelised with `Promise.all`.
+All state lives in a single `App.tsx` component — no global store. `useCallback` + `useEffect` trigger `fetchAll()` whenever the selected `site_id` or the date range changes. All 6 API calls are parallelised with `Promise.all`.
 
 ### Files
 
 #### [dashboard/src/api.ts](file:///Users/vatsalpatel/Desktop/iris/dashboard/src/api.ts)
-Thin API client. `BASE = ""` means all requests go to the same host as the dashboard (the Go server serves both). `buildParams` constructs the `?domain=&from=&to=` querystring.
+Thin API client. `BASE = ""` means all requests go to the same host as the dashboard (the Go server serves both). `buildParams` constructs the `?site_id=&from=&to=` querystring.
 
 #### [dashboard/src/App.tsx](file:///Users/vatsalpatel/Desktop/iris/dashboard/src/App.tsx)
 The root component — handles all state. Contains:
 - **Sidebar** with tab navigation (Overview / Pages / Referrers / Web Vitals / Devices)
-- **Topbar** with domain input form + date preset buttons (7d / 30d / 90d)
+- **Topbar** with `site_id` selection and date preset buttons (7d / 30d / 90d)
 - **Content area** — switches between tab views, always shows `StatsCards` at top
 
 #### Components
@@ -280,7 +280,7 @@ Runs on `host:8081 → container:8080`. Mounts `./data:/app/data` for SQLite per
 
 1. **No authentication on the API** — anyone who knows your server URL can query analytics for any domain. The API is designed for trusted internal/selfhosted use.
 
-2. **Domain is the only multi-tenancy axis** — `site_id` is stored but all current queries filter by `domain`. `site_id` is essentially unused on the read path.
+2. **`site_id` is the primary tenancy axis** — reads aggregate by logical `site_id`, so one site can span multiple domains or subdomains. Legacy `domain` query params are still accepted for older clients.
 
 3. **`history.pushState` patch is not cleaned up** — `stop()` only removes the `popstate` listener. The `pushState` monkey-patch persists after `stop()` (intentional — noted in comment, due to other libraries also patching it).
 
@@ -290,7 +290,7 @@ Runs on `host:8081 → container:8080`. Mounts `./data:/app/data` for SQLite per
 
 6. **SQLite + CGO** — requires `gcc` at build time and is single-file, single-process. Not horizontally scalable, but appropriate for self-hosted / personal use.
 
-7. **Device detection via screen width** — not User-Agent parsing. Breakpoints: `<768px` = Mobile, `<1024px` = Tablet, `≥1024px` = Desktop.
+7. **Device detection via pageview screen width** — not User-Agent parsing. Breakpoints: `<768px` = Mobile, `<1024px` = Tablet, `≥1024px` = Desktop.
 
 8. **Properties are stored as a flat JSON string** — queried via SQLite's `json_extract()`. Works for simple cases (vitals), but complex property querying is limited.
 

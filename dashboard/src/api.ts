@@ -1,5 +1,5 @@
-// Centralised API client for the Iris analytics backend.
-// All endpoints expect ?domain=&from=&to= query params.
+// Centralized API client for the Iris analytics backend.
+// All stats endpoints expect ?site_id=&from=&to= query params.
 
 const BASE = "";
 
@@ -32,10 +32,11 @@ export interface DeviceStat {
 export interface SiteStat {
     site_id: string;
     domain: string;
+    domains: string[];
 }
 
-function buildParams(domain: string, from: string, to: string) {
-    const p = new URLSearchParams({ domain });
+function buildParams(siteId: string, from: string, to: string) {
+    const p = new URLSearchParams({ site_id: siteId });
     if (from) p.set("from", from);
     if (to) p.set("to", to);
     return p.toString();
@@ -48,23 +49,23 @@ async function get<T>(path: string): Promise<T> {
 }
 
 export const api = {
-    stats: (domain: string, from: string, to: string) =>
-        get<StatsResult>(`/api/stats?${buildParams(domain, from, to)}`),
+    stats: (siteId: string, from: string, to: string) =>
+        get<StatsResult>(`/api/stats?${buildParams(siteId, from, to)}`),
 
-    pages: (domain: string, from: string, to: string) =>
-        get<PageStat[]>(`/api/pages?${buildParams(domain, from, to)}`),
+    pages: (siteId: string, from: string, to: string) =>
+        get<PageStat[]>(`/api/pages?${buildParams(siteId, from, to)}`),
 
-    referrers: (domain: string, from: string, to: string) =>
-        get<ReferrerStat[]>(`/api/referrers?${buildParams(domain, from, to)}`),
+    referrers: (siteId: string, from: string, to: string) =>
+        get<ReferrerStat[]>(`/api/referrers?${buildParams(siteId, from, to)}`),
 
-    vitals: (domain: string, from: string, to: string) =>
-        get<VitalStat[]>(`/api/vitals?${buildParams(domain, from, to)}`),
+    vitals: (siteId: string, from: string, to: string) =>
+        get<VitalStat[]>(`/api/vitals?${buildParams(siteId, from, to)}`),
 
-    devices: (domain: string, from: string, to: string) =>
-        get<DeviceStat[]>(`/api/devices?${buildParams(domain, from, to)}`),
+    devices: (siteId: string, from: string, to: string) =>
+        get<DeviceStat[]>(`/api/devices?${buildParams(siteId, from, to)}`),
 
-    timeseries: (domain: string, from: string, to: string) =>
-        get<{ date: string; pageviews: number }[]>(`/api/timeseries?${buildParams(domain, from, to)}`),
+    timeseries: (siteId: string, from: string, to: string) =>
+        get<{ date: string; pageviews: number }[]>(`/api/timeseries?${buildParams(siteId, from, to)}`),
 
     sites: () =>
         get<SiteStat[]>(`/api/sites`),

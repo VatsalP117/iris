@@ -6,7 +6,7 @@ A dead-simple, privacy-friendly, self-hosted web analytics platform with a Next.
 
 * **Frontend Dashboard:** React 18 + Vite (Tailwind/Plain CSS)
 * **Backend API:** Go (`net/http`) + SQLite
-* **Client SDK:** Typescript (`@bigchill101/iris`)
+* **Client SDK:** Typescript (`iris-analytics`)
 
 ---
 
@@ -44,10 +44,10 @@ npm publish --access public
 ### Installation
 
 ```bash
-npm install @bigchill101/iris
+npm install iris-analytics
 # or
-yarn add @bigchill101/iris
-pnpm add @bigchill101/iris
+yarn add iris-analytics
+pnpm add iris-analytics
 ```
 
 ### Initialization (React / Next.js / Vue / Vanilla)
@@ -55,7 +55,7 @@ pnpm add @bigchill101/iris
 Initialize Iris **once** at the root of your application (e.g., `_app.tsx`, `layout.tsx`, or `main.ts`).
 
 ```typescript
-import { Iris } from '@bigchill101/iris';
+import { Iris } from 'iris-analytics';
 
 const analytics = new Iris({
   // Point this to your hosted Iris server URL

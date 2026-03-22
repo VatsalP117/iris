@@ -38,7 +38,6 @@ type ReferrerStat struct {
 type VitalStat struct {
 	Name  string  `json:"name"`
 	Value float64 `json:"value"`
-	// "good", "needs-improvement", or "poor" — based on last recorded rating
 }
 
 type DeviceStat struct {
@@ -47,8 +46,9 @@ type DeviceStat struct {
 }
 
 type SiteStat struct {
-	SiteID string `json:"site_id"`
-	Domain string `json:"domain"`
+	SiteID  string   `json:"site_id"`
+	Domain  string   `json:"domain"`
+	Domains []string `json:"domains,omitempty"`
 }
 
 type TimeSeriesBucket struct {
@@ -59,12 +59,12 @@ type TimeSeriesBucket struct {
 type EventRepository interface {
 	Insert(ctx context.Context, event *Event) error
 	InsertBatch(ctx context.Context, events []*Event) error
-	GetStats(ctx context.Context, domain, from, to string) (*StatsResult, error)
-	GetTopPages(ctx context.Context, domain, from, to string, limit int) ([]PageStat, error)
-	GetTopReferrers(ctx context.Context, domain, from, to string, limit int) ([]ReferrerStat, error)
-	GetVitals(ctx context.Context, domain, from, to string) ([]VitalStat, error)
-	GetDevices(ctx context.Context, domain, from, to string) ([]DeviceStat, error)
-	GetPageviewsTimeSeries(ctx context.Context, domain, from, to string) ([]TimeSeriesBucket, error)
+	GetStats(ctx context.Context, siteKey, from, to string) (*StatsResult, error)
+	GetTopPages(ctx context.Context, siteKey, from, to string, limit int) ([]PageStat, error)
+	GetTopReferrers(ctx context.Context, siteKey, from, to string, limit int) ([]ReferrerStat, error)
+	GetVitals(ctx context.Context, siteKey, from, to string) ([]VitalStat, error)
+	GetDevices(ctx context.Context, siteKey, from, to string) ([]DeviceStat, error)
+	GetPageviewsTimeSeries(ctx context.Context, siteKey, from, to string) ([]TimeSeriesBucket, error)
 	GetSites(ctx context.Context) ([]SiteStat, error)
 	Close() error
 }

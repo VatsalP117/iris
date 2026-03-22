@@ -30,7 +30,7 @@ tasks:
 
   build:js:
     cmds:
-      - pnpm --filter @bigchill101/iris build
+      - pnpm --filter iris-analytics build
       - pnpm --filter @iris/dashboard build
 
   build:

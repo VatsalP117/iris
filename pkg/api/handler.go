@@ -44,19 +44,22 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 }
 
 type statsQuery struct {
-	Domain string
+	SiteID string
 	From   string
 	To     string
 }
 
 func parseStatsQuery(w http.ResponseWriter, r *http.Request) (statsQuery, bool) {
 	q := r.URL.Query()
-	domain := q.Get("domain")
-	if domain == "" {
-		http.Error(w, "domain is required", http.StatusBadRequest)
+	siteID := q.Get("site_id")
+	if siteID == "" {
+		siteID = q.Get("domain")
+	}
+	if siteID == "" {
+		http.Error(w, "site_id is required", http.StatusBadRequest)
 		return statsQuery{}, false
 	}
-	return statsQuery{Domain: domain, From: q.Get("from"), To: q.Get("to")}, true
+	return statsQuery{SiteID: siteID, From: q.Get("from"), To: q.Get("to")}, true
 }
 
 func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {
@@ -130,7 +133,7 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := h.Repo.GetStats(r.Context(), q.Domain, q.From, q.To)
+	result, err := h.Repo.GetStats(r.Context(), q.SiteID, q.From, q.To)
 	if err != nil {
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
@@ -143,7 +146,7 @@ func (h *Handler) GetPages(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := h.Repo.GetTopPages(r.Context(), q.Domain, q.From, q.To, 10)
+	result, err := h.Repo.GetTopPages(r.Context(), q.SiteID, q.From, q.To, 10)
 	if err != nil {
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
@@ -156,7 +159,7 @@ func (h *Handler) GetReferrers(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := h.Repo.GetTopReferrers(r.Context(), q.Domain, q.From, q.To, 10)
+	result, err := h.Repo.GetTopReferrers(r.Context(), q.SiteID, q.From, q.To, 10)
 	if err != nil {
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
@@ -169,7 +172,7 @@ func (h *Handler) GetVitals(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := h.Repo.GetVitals(r.Context(), q.Domain, q.From, q.To)
+	result, err := h.Repo.GetVitals(r.Context(), q.SiteID, q.From, q.To)
 	if err != nil {
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
@@ -182,7 +185,7 @@ func (h *Handler) GetDevices(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := h.Repo.GetDevices(r.Context(), q.Domain, q.From, q.To)
+	result, err := h.Repo.GetDevices(r.Context(), q.SiteID, q.From, q.To)
 	if err != nil {
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
@@ -195,7 +198,7 @@ func (h *Handler) GetTimeSeries(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := h.Repo.GetPageviewsTimeSeries(r.Context(), q.Domain, q.From, q.To)
+	result, err := h.Repo.GetPageviewsTimeSeries(r.Context(), q.SiteID, q.From, q.To)
 	if err != nil {
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return

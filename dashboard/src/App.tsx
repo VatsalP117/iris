@@ -53,17 +53,17 @@ export default function App() {
             .finally(() => setSitesLoading(false));
     }, []);
 
-    const fetchAll = useCallback(async (domain: string) => {
-        if (!domain) return;
+    const fetchAll = useCallback(async (siteId: string) => {
+        if (!siteId) return;
         setLoading(true);
         try {
             const [s, p, r, v, dev, ts] = await Promise.all([
-                api.stats(domain, fromStr, toStr),
-                api.pages(domain, fromStr, toStr),
-                api.referrers(domain, fromStr, toStr),
-                api.vitals(domain, fromStr, toStr),
-                api.devices(domain, fromStr, toStr),
-                api.timeseries(domain, fromStr, toStr),
+                api.stats(siteId, fromStr, toStr),
+                api.pages(siteId, fromStr, toStr),
+                api.referrers(siteId, fromStr, toStr),
+                api.vitals(siteId, fromStr, toStr),
+                api.devices(siteId, fromStr, toStr),
+                api.timeseries(siteId, fromStr, toStr),
             ]);
             setStats(s);
             setPages(p ?? []);
@@ -79,7 +79,7 @@ export default function App() {
     }, [fromStr, toStr]);
 
     useEffect(() => {
-        if (selectedSite) fetchAll(selectedSite.domain);
+        if (selectedSite) fetchAll(selectedSite.site_id);
     }, [selectedSite, fetchAll]);
 
     function handlePreset(days: number) {
@@ -100,7 +100,10 @@ export default function App() {
     }
 
     const emptyBuckets = buildEmptyBuckets(from, to);
-    const domain = selectedSite?.domain ?? "";
+    const siteId = selectedSite?.site_id ?? "";
+    const domainSummary = selectedSite?.domains?.length
+        ? selectedSite.domains.join(", ")
+        : selectedSite?.domain ?? "";
 
     return (
         <div className="app-layout">
@@ -146,8 +149,19 @@ export default function App() {
                 {/* Topbar */}
                 <header className="topbar">
                     <div className="topbar-left">
-                        {domain ? (
-                            <span className="domain-badge">{domain}</span>
+                        {siteId ? (
+                            <>
+                                <span className="domain-badge">{siteId}</span>
+                                {domainSummary && domainSummary !== siteId && (
+                                    <span
+                                        className="topbar-title"
+                                        style={{ color: "var(--text-muted)" }}
+                                        title={domainSummary}
+                                    >
+                                        {domainSummary}
+                                    </span>
+                                )}
+                            </>
                         ) : (
                             <span className="topbar-title" style={{ color: "var(--text-muted)" }}>
                                 {sitesLoading ? "Loading sites…" : "No sites found"}
@@ -167,7 +181,7 @@ export default function App() {
                             >
                                 {sites.map((s) => (
                                     <option key={s.site_id} value={s.site_id}>
-                                        {s.domain}
+                                        {s.site_id}
                                     </option>
                                 ))}
                             </select>
@@ -178,7 +192,7 @@ export default function App() {
                             <button
                                 className="btn btn-ghost"
                                 id="refresh-btn"
-                                onClick={() => fetchAll(selectedSite.domain)}
+                                onClick={() => fetchAll(selectedSite.site_id)}
                                 disabled={loading}
                                 title="Refresh data"
                                 style={{ fontSize: 15, transition: "transform 0.4s", transform: loading ? "rotate(360deg)" : "none" }}

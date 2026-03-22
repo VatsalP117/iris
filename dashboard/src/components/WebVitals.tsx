@@ -49,7 +49,7 @@ export function WebVitals({ vitals, loading }: Props) {
             <div className="card-header">
                 <span className="card-title">Web Vitals</span>
                 <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                    Avg across sessions
+                    P75 across page loads
                 </span>
             </div>
             <div className="card-body">

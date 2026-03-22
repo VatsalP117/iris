@@ -1,6 +1,6 @@
 {
   "name": "iris-analytics",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Privacy-first, self-hosted analytics client",
   "license": "MIT",
   "main": "./dist/index.js",
