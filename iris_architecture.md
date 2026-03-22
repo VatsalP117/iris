@@ -181,7 +181,7 @@ All read queries. Each follows the same pattern:
 #### [pkg/api/handler.go](file:///Users/vatsalpatel/Desktop/iris/pkg/api/handler.go)
 HTTP layer wiring `net/http` to the repository.
 
-**CORS:** All endpoints call `setCORSHeaders()` — sets `Access-Control-Allow-Origin` to the request's `Origin` header (or `*` if absent), allowing `GET, POST, OPTIONS`.
+**CORS:** Ingest and dashboard APIs can each be locked down with env-based origin allowlists. If no allowlist is configured, browser access remains open for development.
 
 **String truncation:** `truncateStrings()` recursively walks the `Properties` map and truncates any string value > 200 chars to prevent abuse/bloat.
 

@@ -14,3 +14,6 @@ services:
       - PORT=8080
       - DB_PATH=/app/data/iris.db
       - DASHBOARD_DIR=/app/dashboard/dist
+      # Example production lockdown:
+      # - IRIS_ALLOWED_INGEST_ORIGINS=https://algomind.pro,https://www.algomind.pro,https://sahirashifal.com,https://www.sahirashifal.com
+      # - IRIS_ALLOWED_DASHBOARD_ORIGINS=https://analytics.algomind.pro
