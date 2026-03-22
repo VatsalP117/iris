@@ -23,7 +23,7 @@ func TestCORSMiddlewareAllowsAllOrigins(t *testing.T) {
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("unexpected status code: got %d want %d", rec.Code, http.StatusAccepted)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://algomind.pro" {
 		t.Fatalf("unexpected allow-origin header: got %q", got)
 	}
 	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, OPTIONS" {
@@ -31,6 +31,12 @@ func TestCORSMiddlewareAllowsAllOrigins(t *testing.T) {
 	}
 	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type" {
 		t.Fatalf("unexpected allow-headers header: got %q", got)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+		t.Fatalf("unexpected allow-credentials header: got %q", got)
+	}
+	if got := rec.Header().Get("Vary"); got != "Origin" {
+		t.Fatalf("unexpected vary header: got %q", got)
 	}
 }
 
@@ -49,7 +55,29 @@ func TestCORSMiddlewareHandlesPreflight(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("unexpected status code: got %d want %d", rec.Code, http.StatusOK)
 	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://evil.example" {
+		t.Fatalf("unexpected allow-origin header: got %q", got)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type" {
+		t.Fatalf("unexpected allow-headers header: got %q", got)
+	}
+}
+
+func TestCORSMiddlewareUsesWildcardWithoutOrigin(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/sites", nil)
+
+	rec := httptest.NewRecorder()
+	NewCORSMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected status code: got %d want %d", rec.Code, http.StatusOK)
+	}
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "*" {
 		t.Fatalf("unexpected allow-origin header: got %q", got)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != "" {
+		t.Fatalf("expected no allow-credentials header, got %q", got)
 	}
 }
