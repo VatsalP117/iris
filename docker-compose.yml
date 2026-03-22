@@ -11,9 +11,8 @@ services:
       # Mount the local data directory to persist the SQLite database
       - ./data:/app/data
     environment:
-      - PORT=8080
-      - DB_PATH=/app/data/iris.db
-      - DASHBOARD_DIR=/app/dashboard/dist
-      # Example production lockdown:
-      # - IRIS_ALLOWED_INGEST_ORIGINS=https://algomind.pro,https://www.algomind.pro,https://sahirashifal.com,https://www.sahirashifal.com
-      # - IRIS_ALLOWED_DASHBOARD_ORIGINS=https://analytics.algomind.pro
+      - PORT=${PORT:-8080}
+      - DB_PATH=${DB_PATH:-/app/data/iris.db}
+      - DASHBOARD_DIR=${DASHBOARD_DIR:-/app/dashboard/dist}
+      - IRIS_ALLOWED_INGEST_ORIGINS=${IRIS_ALLOWED_INGEST_ORIGINS:-}
+      - IRIS_ALLOWED_DASHBOARD_ORIGINS=${IRIS_ALLOWED_DASHBOARD_ORIGINS:-}
