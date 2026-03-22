@@ -130,17 +130,8 @@ When running the Go backend, you can configure it using the following environmen
 | `PORT` | `8080` | The port the HTTP server binds to. |
 | `DB_PATH` | `./data/iris.db` | The path to the SQLite database file. |
 | `DASHBOARD_DIR` | `./dashboard/dist` | Path to the directory containing the built frontend. |
-| `IRIS_ALLOWED_INGEST_ORIGINS` | unset | Comma-separated browser origins allowed to send events. Unset keeps ingest CORS open for all origins. |
-| `IRIS_ALLOWED_DASHBOARD_ORIGINS` | unset | Comma-separated browser origins allowed to call dashboard read APIs. Unset keeps dashboard API CORS open for all origins. |
-
-Example production setup:
-
-```bash
-IRIS_ALLOWED_INGEST_ORIGINS=https://algomind.pro,https://www.algomind.pro,https://sahirashifal.com,https://www.sahirashifal.com
-IRIS_ALLOWED_DASHBOARD_ORIGINS=https://analytics.algomind.pro
-```
 
 ## 5. Security & Privacy
 
 * **No Cookies:** User identity is tracked anonymously using standard `localStorage` (Visitor ID) and `sessionStorage` (Session ID). No third-party cookies are used.
-* **CORS:** Configure browser allowlists with `IRIS_ALLOWED_INGEST_ORIGINS` and `IRIS_ALLOWED_DASHBOARD_ORIGINS`. This protects browser access, but it is not full authentication for non-browser clients.
+* **CORS:** The backend allows cross-origin browser requests by default so the SDK and hosted dashboard can talk to the API without additional setup.
