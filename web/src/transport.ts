@@ -48,14 +48,14 @@ export class Transport {
     if (this.config.debug) console.log(`Iris: Flushing ${events.length} events`);
 
     if (navigator.sendBeacon) {
-      const blob = new Blob([body], { type: API_REQUEST_CONSTANTS.CONTENT_TYPES.JSON });
+      const blob = new Blob([body], { type: API_REQUEST_CONSTANTS.CONTENT_TYPES.TEXT_PLAIN });
       navigator.sendBeacon(url, blob);
     } else {
       fetch(url, {
         method: API_REQUEST_CONSTANTS.METHODS.POST,
         body,
         keepalive: true,
-        headers: { [API_REQUEST_CONSTANTS.HEADERS.CONTENT_TYPE]: API_REQUEST_CONSTANTS.CONTENT_TYPES.JSON },
+        headers: { [API_REQUEST_CONSTANTS.HEADERS.CONTENT_TYPE]: API_REQUEST_CONSTANTS.CONTENT_TYPES.TEXT_PLAIN },
       }).catch((err) => {
         if (this.config.debug) console.error("Iris: Batch flush failed", err);
       });
@@ -83,14 +83,14 @@ export class Transport {
     const body = JSON.stringify(payload);
 
     if (navigator.sendBeacon) {
-      const blob = new Blob([body], { type: API_REQUEST_CONSTANTS.CONTENT_TYPES.JSON });
+      const blob = new Blob([body], { type: API_REQUEST_CONSTANTS.CONTENT_TYPES.TEXT_PLAIN });
       navigator.sendBeacon(url, blob);
     } else {
       fetch(url, {
         method: API_REQUEST_CONSTANTS.METHODS.POST,
         body,
         keepalive: true,
-        headers: { [API_REQUEST_CONSTANTS.HEADERS.CONTENT_TYPE]: API_REQUEST_CONSTANTS.CONTENT_TYPES.JSON },
+        headers: { [API_REQUEST_CONSTANTS.HEADERS.CONTENT_TYPE]: API_REQUEST_CONSTANTS.CONTENT_TYPES.TEXT_PLAIN },
       }).catch((err) => {
         if (this.config.debug) console.error("Iris: Failed to send", err);
       });
