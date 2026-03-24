@@ -8,7 +8,7 @@ export const API_REQUEST_CONSTANTS = {
         CONTENT_TYPE: "Content-Type",
     },
     CONTENT_TYPES: {
-        TEXT_PLAIN: "text/plain",
+        JSON: "application/json",
     },
     METHODS: {
         POST: "POST",
