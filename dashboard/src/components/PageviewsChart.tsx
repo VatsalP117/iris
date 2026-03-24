@@ -9,11 +9,6 @@ import {
 } from "recharts";
 import { format, subDays, eachDayOfInterval, parseISO } from "date-fns";
 
-// This component visualises pageviews over time.
-// Since the backend doesn't yet have a time-series endpoint,
-// we derive a daily breakdown from the window [from, to] with mock zero-fill
-// and let the parent pass pre-aggregated day buckets when available.
-
 export interface DayBucket {
     date: string; // "YYYY-MM-DD"
     pageviews: number;
@@ -56,11 +51,16 @@ export function PageviewsChart({ data, loading, from, to }: Props) {
         const key = format(d, "yyyy-MM-dd");
         return { date: key, pageviews: byDate[key] ?? 0 };
     });
+    const isShortWindow = to.getTime() - from.getTime() <= 36 * 60 * 60 * 1000;
+    const windowLabel = isShortWindow
+        ? `${format(from, "MMM d, p")} - ${format(to, "MMM d, p")}`
+        : `${format(from, "MMM d")} - ${format(to, "MMM d, yyyy")}`;
 
     return (
         <div className="card full-width">
             <div className="card-header">
                 <span className="card-title">Pageviews Over Time</span>
+                <span className="card-meta">{windowLabel}</span>
             </div>
             <div className="card-body" style={{ height: 220 }}>
                 {loading ? (

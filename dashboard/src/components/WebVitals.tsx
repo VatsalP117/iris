@@ -48,7 +48,7 @@ export function WebVitals({ vitals, loading }: Props) {
         <div className="card">
             <div className="card-header">
                 <span className="card-title">Web Vitals</span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                <span className="card-meta">
                     P75 across page loads
                 </span>
             </div>

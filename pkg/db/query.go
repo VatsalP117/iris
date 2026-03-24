@@ -13,11 +13,13 @@ import (
 
 //
 // Helper to build WHERE clauses consistently.
-// All query methods accept a site key plus from/to strings (ISO8601 dates or empty).
+// All query methods accept a site key plus from/to strings (date or datetime, or empty).
 // The site key can be the logical site_id or a legacy domain value.
 //
 
 const siteMatchClause = "(COALESCE(NULLIF(site_id, ''), domain) = ? OR domain = ?)"
+const fromTimeClause = "(? = '' OR datetime(timestamp) >= datetime(?))"
+const toTimeClause = "(? = '' OR datetime(timestamp) <= datetime(CASE WHEN length(trim(?)) = 10 THEN ? || ' 23:59:59' ELSE ? END))"
 
 func (r *SqliteRepository) GetStats(ctx context.Context, siteKey, from, to string) (*core.StatsResult, error) {
 	query := `
@@ -28,10 +30,10 @@ func (r *SqliteRepository) GetStats(ctx context.Context, siteKey, from, to strin
 	FROM events
 	WHERE event_name = '$pageview'
 	  AND ` + siteMatchClause + `
-	  AND (? = '' OR timestamp >= ?)
-	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
+	  AND ` + fromTimeClause + `
+	  AND ` + toTimeClause + `
 	`
-	row := r.db.QueryRowContext(ctx, query, siteKey, siteKey, from, from, to, to)
+	row := r.db.QueryRowContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to)
 
 	var res core.StatsResult
 	if err := row.Scan(&res.Pageviews, &res.UniqueVisitors, &res.Sessions); err != nil {
@@ -46,13 +48,13 @@ func (r *SqliteRepository) GetTopPages(ctx context.Context, siteKey, from, to st
 	FROM events
 	WHERE event_name = '$pageview'
 	  AND ` + siteMatchClause + `
-	  AND (? = '' OR timestamp >= ?)
-	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
+	  AND ` + fromTimeClause + `
+	  AND ` + toTimeClause + `
 	GROUP BY url
 	ORDER BY pageviews DESC
 	LIMIT ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, limit)
+	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -76,10 +78,10 @@ func (r *SqliteRepository) GetTopReferrers(ctx context.Context, siteKey, from, t
 	WHERE event_name = '$pageview'
 	  AND ` + siteMatchClause + `
 	  AND referrer != ''
-	  AND (? = '' OR timestamp >= ?)
-	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
+	  AND ` + fromTimeClause + `
+	  AND ` + toTimeClause + `
 	`
-	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to)
+	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to)
 	if err != nil {
 		return nil, err
 	}
@@ -136,10 +138,10 @@ func (r *SqliteRepository) GetVitals(ctx context.Context, siteKey, from, to stri
 	FROM events
 	WHERE event_name = '$web_vital'
 	  AND ` + siteMatchClause + `
-	  AND (? = '' OR timestamp >= ?)
-	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
+	  AND ` + fromTimeClause + `
+	  AND ` + toTimeClause + `
 	`
-	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to)
+	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to)
 	if err != nil {
 		return nil, err
 	}
@@ -188,12 +190,12 @@ func (r *SqliteRepository) GetPageviewsTimeSeries(ctx context.Context, siteKey, 
 	FROM events
 	WHERE event_name = '$pageview'
 	  AND ` + siteMatchClause + `
-	  AND (? = '' OR timestamp >= ?)
-	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
+	  AND ` + fromTimeClause + `
+	  AND ` + toTimeClause + `
 	GROUP BY day
 	ORDER BY day ASC
 	`
-	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to)
+	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to)
 	if err != nil {
 		return nil, err
 	}
@@ -222,12 +224,12 @@ func (r *SqliteRepository) GetDevices(ctx context.Context, siteKey, from, to str
 	FROM events
 	WHERE event_name = '$pageview'
 	  AND ` + siteMatchClause + `
-	  AND (? = '' OR timestamp >= ?)
-	  AND (? = '' OR timestamp <= ? || ' 23:59:59')
+	  AND ` + fromTimeClause + `
+	  AND ` + toTimeClause + `
 	GROUP BY device
 	ORDER BY count DESC
 	`
-	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to)
+	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to)
 	if err != nil {
 		return nil, err
 	}

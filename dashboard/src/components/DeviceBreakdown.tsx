@@ -18,7 +18,7 @@ export function DeviceBreakdown({ devices, loading }: Props) {
         <div className="card">
             <div className="card-header">
                 <span className="card-title">Devices</span>
-                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                <span className="card-meta">
                     By screen width
                 </span>
             </div>
@@ -41,7 +41,7 @@ export function DeviceBreakdown({ devices, loading }: Props) {
                                         <span className="device-name">{d.device}</span>
                                         <span className="device-count">
                                             {pct}%{" "}
-                                            <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>
+                                            <span className="device-count-muted">
                                                 ({d.count.toLocaleString()})
                                             </span>
                                         </span>

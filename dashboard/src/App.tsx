@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { format, subDays } from "date-fns";
+import { format, subDays, subHours } from "date-fns";
 import { api, StatsResult, PageStat, ReferrerStat, VitalStat, DeviceStat, SiteStat } from "./api";
 import { StatsCards } from "./components/StatsCards";
 import { TopPages } from "./components/TopPages";
@@ -8,17 +8,72 @@ import { WebVitals } from "./components/WebVitals";
 import { DeviceBreakdown } from "./components/DeviceBreakdown";
 import { PageviewsChart, buildEmptyBuckets, DayBucket } from "./components/PageviewsChart";
 
-const DATE_PRESETS = [
-    { label: "7d", days: 7 },
-    { label: "30d", days: 30 },
-    { label: "90d", days: 90 },
+type Tab = "overview" | "pages" | "referrers" | "vitals" | "devices";
+type PresetKey = "24h" | "7d" | "30d" | "90d";
+
+type DatePreset = {
+    key: PresetKey;
+    label: string;
+    unit: "hours" | "days";
+    amount: number;
+};
+
+type DateWindow = {
+    from: Date;
+    to: Date;
+    queryFrom: string;
+    queryTo: string;
+};
+
+const DATE_PRESETS: DatePreset[] = [
+    { key: "24h", label: "24h", unit: "hours", amount: 24 },
+    { key: "7d", label: "7d", unit: "days", amount: 7 },
+    { key: "30d", label: "30d", unit: "days", amount: 30 },
+    { key: "90d", label: "90d", unit: "days", amount: 90 },
 ];
 
 function fmtDate(d: Date): string {
     return format(d, "yyyy-MM-dd");
 }
 
-type Tab = "overview" | "pages" | "referrers" | "vitals" | "devices";
+function fmtDateTime(d: Date): string {
+    return format(d, "yyyy-MM-dd'T'HH:mm:ssxxx");
+}
+
+function buildWindow(preset: PresetKey): DateWindow {
+    const cfg = DATE_PRESETS.find((p) => p.key === preset) ?? DATE_PRESETS[2];
+    const to = new Date();
+
+    if (cfg.unit === "hours") {
+        const from = subHours(to, cfg.amount);
+        return {
+            from,
+            to,
+            queryFrom: fmtDateTime(from),
+            queryTo: fmtDateTime(to),
+        };
+    }
+
+    const from = subDays(to, cfg.amount);
+    return {
+        from,
+        to,
+        queryFrom: fmtDate(from),
+        queryTo: fmtDate(to),
+    };
+}
+
+function formatWindow(window: DateWindow, preset: PresetKey): string {
+    if (preset === "24h") {
+        return `${format(window.from, "MMM d, p")} - ${format(window.to, "MMM d, p")}`;
+    }
+    return `${format(window.from, "MMM d")} - ${format(window.to, "MMM d, yyyy")}`;
+}
+
+function getRangeLabel(preset: PresetKey): string {
+    if (preset === "24h") return "Last 24 hours";
+    return `Last ${preset.replace("d", " days")}`;
+}
 
 export default function App() {
     const [sites, setSites] = useState<SiteStat[]>([]);
@@ -26,9 +81,8 @@ export default function App() {
     const [selectedSite, setSelectedSite] = useState<SiteStat | null>(null);
 
     const [activeTab, setActiveTab] = useState<Tab>("overview");
-    const [preset, setPreset] = useState(30);
-    const [from, setFrom] = useState<Date>(() => subDays(new Date(), 30));
-    const [to] = useState<Date>(new Date());
+    const [preset, setPreset] = useState<PresetKey>("30d");
+    const [windowRange, setWindowRange] = useState<DateWindow>(() => buildWindow("30d"));
 
     const [stats, setStats] = useState<StatsResult | null>(null);
     const [pages, setPages] = useState<PageStat[]>([]);
@@ -38,10 +92,6 @@ export default function App() {
     const [chartData, setChartData] = useState<DayBucket[]>([]);
     const [loading, setLoading] = useState(false);
 
-    const fromStr = fmtDate(from);
-    const toStr = fmtDate(to);
-
-    // Fetch available sites on mount and auto-select first
     useEffect(() => {
         setSitesLoading(true);
         api.sites()
@@ -53,17 +103,17 @@ export default function App() {
             .finally(() => setSitesLoading(false));
     }, []);
 
-    const fetchAll = useCallback(async (siteId: string) => {
+    const fetchAll = useCallback(async (siteId: string, range: DateWindow = windowRange) => {
         if (!siteId) return;
         setLoading(true);
         try {
             const [s, p, r, v, dev, ts] = await Promise.all([
-                api.stats(siteId, fromStr, toStr),
-                api.pages(siteId, fromStr, toStr),
-                api.referrers(siteId, fromStr, toStr),
-                api.vitals(siteId, fromStr, toStr),
-                api.devices(siteId, fromStr, toStr),
-                api.timeseries(siteId, fromStr, toStr),
+                api.stats(siteId, range.queryFrom, range.queryTo),
+                api.pages(siteId, range.queryFrom, range.queryTo),
+                api.referrers(siteId, range.queryFrom, range.queryTo),
+                api.vitals(siteId, range.queryFrom, range.queryTo),
+                api.devices(siteId, range.queryFrom, range.queryTo),
+                api.timeseries(siteId, range.queryFrom, range.queryTo),
             ]);
             setStats(s);
             setPages(p ?? []);
@@ -76,21 +126,21 @@ export default function App() {
         } finally {
             setLoading(false);
         }
-    }, [fromStr, toStr]);
+    }, [windowRange]);
 
     useEffect(() => {
         if (selectedSite) fetchAll(selectedSite.site_id);
     }, [selectedSite, fetchAll]);
 
-    function handlePreset(days: number) {
-        setPreset(days);
-        setFrom(subDays(new Date(), days));
+    function handlePreset(nextPreset: PresetKey) {
+        setPreset(nextPreset);
+        setWindowRange(buildWindow(nextPreset));
     }
 
     function handleSiteChange(e: React.ChangeEvent<HTMLSelectElement>) {
         const site = sites.find((s) => s.site_id === e.target.value) ?? null;
         setSelectedSite(site);
-        // Reset data so stale values don't flash
+
         setStats(null);
         setPages([]);
         setReferrers([]);
@@ -99,7 +149,12 @@ export default function App() {
         setChartData([]);
     }
 
-    const emptyBuckets = buildEmptyBuckets(from, to);
+    function handleRefresh() {
+        if (!selectedSite) return;
+        setWindowRange(buildWindow(preset));
+    }
+
+    const emptyBuckets = buildEmptyBuckets(windowRange.from, windowRange.to);
     const siteId = selectedSite?.site_id ?? "";
     const domainSummary = selectedSite?.domains?.length
         ? selectedSite.domains.join(", ")
@@ -107,77 +162,64 @@ export default function App() {
 
     return (
         <div className="app-layout">
-            {/* Sidebar */}
             <aside className="sidebar">
                 <div className="sidebar-logo">
-                    <div className="sidebar-logo-icon">👁</div>
-                    <span className="sidebar-logo-text">
-                        <span>iris</span>
-                    </span>
+                    <div className="sidebar-logo-icon">IR</div>
+                    <div className="sidebar-logo-copy">
+                        <span className="sidebar-logo-text">Iris Analytics</span>
+                        <span className="sidebar-logo-subtext">Self-hosted insights</span>
+                    </div>
                 </div>
 
-                <span className="sidebar-section-label">Navigation</span>
+                <span className="sidebar-section-label">Sections</span>
 
-                <SidebarItem icon="📊" label="Overview" active={activeTab === "overview"} onClick={() => setActiveTab("overview")} />
-                <SidebarItem icon="📄" label="Pages" active={activeTab === "pages"} onClick={() => setActiveTab("pages")} />
-                <SidebarItem icon="🔗" label="Referrers" active={activeTab === "referrers"} onClick={() => setActiveTab("referrers")} />
-                <SidebarItem icon="⚡" label="Web Vitals" active={activeTab === "vitals"} onClick={() => setActiveTab("vitals")} />
-                <SidebarItem icon="📱" label="Devices" active={activeTab === "devices"} onClick={() => setActiveTab("devices")} />
+                <nav className="sidebar-nav" aria-label="Dashboard tabs">
+                    <SidebarItem icon="OV" label="Overview" active={activeTab === "overview"} onClick={() => setActiveTab("overview")} />
+                    <SidebarItem icon="PG" label="Pages" active={activeTab === "pages"} onClick={() => setActiveTab("pages")} />
+                    <SidebarItem icon="RF" label="Referrers" active={activeTab === "referrers"} onClick={() => setActiveTab("referrers")} />
+                    <SidebarItem icon="WV" label="Web Vitals" active={activeTab === "vitals"} onClick={() => setActiveTab("vitals")} />
+                    <SidebarItem icon="DV" label="Devices" active={activeTab === "devices"} onClick={() => setActiveTab("devices")} />
+                </nav>
 
-                <div style={{ flex: 1 }} />
-
-                <div style={{ padding: "0 16px 8px" }}>
-                    <div
-                        style={{
-                            background: "var(--accent-dim)",
-                            border: "1px solid rgba(108,122,255,0.15)",
-                            borderRadius: "var(--radius-md)",
-                            padding: "12px",
-                            fontSize: 12,
-                            color: "var(--text-secondary)",
-                            lineHeight: 1.5,
-                        }}
-                    >
-                        <span style={{ color: "var(--accent)", fontWeight: 600 }}>iris</span>{" "}
-                        v0.1.0 · Self-hosted
-                    </div>
+                <div className="sidebar-footnote">
+                    <span className="sidebar-footnote-label">Build</span>
+                    <span className="sidebar-footnote-value">v0.1.0</span>
+                    <span className="sidebar-footnote-meta">Analytics updates on refresh</span>
                 </div>
             </aside>
 
-            {/* Main */}
             <div className="main-area">
-                {/* Topbar */}
                 <header className="topbar">
                     <div className="topbar-left">
                         {siteId ? (
-                            <>
-                                <span className="domain-badge">{siteId}</span>
-                                {domainSummary && domainSummary !== siteId && (
-                                    <span
-                                        className="topbar-title"
-                                        style={{ color: "var(--text-muted)" }}
-                                        title={domainSummary}
-                                    >
-                                        {domainSummary}
-                                    </span>
-                                )}
-                            </>
+                            <div className="topbar-site-stack">
+                                <div className="topbar-site-row">
+                                    <span className="domain-badge">{siteId}</span>
+                                    {domainSummary && domainSummary !== siteId && (
+                                        <span
+                                            className="topbar-domains"
+                                            title={domainSummary}
+                                        >
+                                            {domainSummary}
+                                        </span>
+                                    )}
+                                </div>
+                                <span className="topbar-range">{formatWindow(windowRange, preset)}</span>
+                            </div>
                         ) : (
-                            <span className="topbar-title" style={{ color: "var(--text-muted)" }}>
+                            <span className="topbar-title-muted">
                                 {sitesLoading ? "Loading sites…" : "No sites found"}
                             </span>
                         )}
                     </div>
 
                     <div className="topbar-right">
-                        {/* Site picker */}
                         {!sitesLoading && sites.length > 0 && (
                             <select
                                 className="input"
                                 value={selectedSite?.site_id ?? ""}
                                 onChange={handleSiteChange}
                                 id="site-picker"
-                                style={{ minWidth: 200 }}
                             >
                                 {sites.map((s) => (
                                     <option key={s.site_id} value={s.site_id}>
@@ -187,28 +229,25 @@ export default function App() {
                             </select>
                         )}
 
-                        {/* Refresh */}
                         {selectedSite && (
                             <button
-                                className="btn btn-ghost"
+                                className={`btn btn-ghost btn-refresh ${loading ? "is-loading" : ""}`}
                                 id="refresh-btn"
-                                onClick={() => fetchAll(selectedSite.site_id)}
+                                onClick={handleRefresh}
                                 disabled={loading}
                                 title="Refresh data"
-                                style={{ fontSize: 15, transition: "transform 0.4s", transform: loading ? "rotate(360deg)" : "none" }}
                             >
                                 ↻
                             </button>
                         )}
 
-                        {/* Date presets */}
-                        <div className="date-range-group">
+                        <div className="date-range-group" role="group" aria-label="Date ranges">
                             {DATE_PRESETS.map((p) => (
                                 <button
-                                    key={p.label}
-                                    className={`btn btn-ghost ${preset === p.days ? "active" : ""}`}
-                                    onClick={() => handlePreset(p.days)}
-                                    id={`preset-${p.label}`}
+                                    key={p.key}
+                                    className={`btn btn-ghost ${preset === p.key ? "active" : ""}`}
+                                    onClick={() => handlePreset(p.key)}
+                                    id={`preset-${p.key}`}
                                 >
                                     {p.label}
                                 </button>
@@ -217,25 +256,19 @@ export default function App() {
                     </div>
                 </header>
 
-                {/* Page content */}
                 <main className="page-content">
-                    {/* Empty / loading states */}
                     {sitesLoading && (
                         <div style={centeredStyle}>
-                            <div style={{ fontSize: 48 }}>👁</div>
-                            <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text-secondary)" }}>
-                                Loading sites…
-                            </div>
+                            <div className="status-glyph">IR</div>
+                            <div className="status-title">Loading sites…</div>
                         </div>
                     )}
 
                     {!sitesLoading && sites.length === 0 && (
                         <div style={centeredStyle}>
-                            <div style={{ fontSize: 48 }}>📭</div>
-                            <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text-secondary)" }}>
-                                No data yet
-                            </div>
-                            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                            <div className="status-glyph">00</div>
+                            <div className="status-title">No data yet</div>
+                            <div className="status-subtitle">
                                 Install the Iris SDK on your site to start collecting analytics.
                             </div>
                         </div>
@@ -243,6 +276,12 @@ export default function App() {
 
                     {!sitesLoading && selectedSite && (
                         <>
+                            <section className="overview-hero">
+                                <span className="overview-eyebrow">Traffic snapshot</span>
+                                <h1 className="overview-title">{getRangeLabel(preset)}</h1>
+                                <p className="overview-subtitle">{formatWindow(windowRange, preset)}</p>
+                            </section>
+
                             <StatsCards stats={stats} loading={loading} />
 
                             {activeTab === "overview" && (
@@ -250,8 +289,8 @@ export default function App() {
                                     <PageviewsChart
                                         data={chartData.length ? chartData : emptyBuckets}
                                         loading={loading}
-                                        from={from}
-                                        to={to}
+                                        from={windowRange.from}
+                                        to={windowRange.to}
                                     />
                                     <TopPages pages={pages} loading={loading} />
                                     <TopReferrers referrers={referrers} loading={loading} />
@@ -261,25 +300,25 @@ export default function App() {
                             )}
 
                             {activeTab === "pages" && (
-                                <div style={{ marginTop: 24, maxWidth: 800 }}>
+                                <div className="single-column-panel">
                                     <TopPages pages={pages} loading={loading} />
                                 </div>
                             )}
 
                             {activeTab === "referrers" && (
-                                <div style={{ marginTop: 24, maxWidth: 800 }}>
+                                <div className="single-column-panel">
                                     <TopReferrers referrers={referrers} loading={loading} />
                                 </div>
                             )}
 
                             {activeTab === "vitals" && (
-                                <div style={{ marginTop: 24, maxWidth: 800 }}>
+                                <div className="single-column-panel">
                                     <WebVitals vitals={vitals} loading={loading} />
                                 </div>
                             )}
 
                             {activeTab === "devices" && (
-                                <div style={{ marginTop: 24, maxWidth: 800 }}>
+                                <div className="single-column-panel">
                                     <DeviceBreakdown devices={devices} loading={loading} />
                                 </div>
                             )}
@@ -315,26 +354,10 @@ function SidebarItem({
     return (
         <button
             onClick={onClick}
-            style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "8px 20px",
-                background: active ? "var(--accent-dim)" : "transparent",
-                border: "none",
-                borderLeft: active ? "2px solid var(--accent)" : "2px solid transparent",
-                color: active ? "var(--accent)" : "var(--text-secondary)",
-                fontSize: 13,
-                fontWeight: active ? 600 : 400,
-                cursor: "pointer",
-                width: "100%",
-                textAlign: "left",
-                transition: "all 0.15s",
-                fontFamily: "var(--font-sans)",
-            }}
+            className={`sidebar-item ${active ? "active" : ""}`}
         >
-            <span style={{ fontSize: 15 }}>{icon}</span>
-            {label}
+            <span className="sidebar-item-icon">{icon}</span>
+            <span className="sidebar-item-label">{label}</span>
         </button>
     );
 }

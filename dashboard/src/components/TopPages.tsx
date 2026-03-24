@@ -12,7 +12,7 @@ export function TopPages({ pages, loading }: Props) {
         <div className="card">
             <div className="card-header">
                 <span className="card-title">Top Pages</span>
-                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                <span className="card-meta">
                     {pages.length} pages
                 </span>
             </div>

@@ -9,23 +9,20 @@ const CARDS = [
     {
         key: "pageviews" as const,
         label: "Pageviews",
-        icon: "📄",
-        color: "#6c7aff",
-        bg: "rgba(108,122,255,0.08)",
+        icon: "PV",
+        tone: "accent",
     },
     {
         key: "unique_visitors" as const,
         label: "Unique Visitors",
-        icon: "👤",
-        color: "#34d399",
-        bg: "rgba(52,211,153,0.08)",
+        icon: "UV",
+        tone: "green",
     },
     {
         key: "sessions" as const,
         label: "Sessions",
-        icon: "🔗",
-        color: "#fbbf24",
-        bg: "rgba(251,191,36,0.08)",
+        icon: "SE",
+        tone: "blue",
     },
 ];
 
@@ -41,19 +38,14 @@ export function StatsCards({ stats, loading }: Props) {
             {CARDS.map((c) => (
                 <div className="stat-card" key={c.key}>
                     <div className="stat-card-label">
-                        <div
-                            className="stat-card-icon"
-                            style={{ background: c.bg, color: c.color }}
-                        >
+                        <div className={`stat-card-icon ${c.tone}`}>
                             {c.icon}
                         </div>
                         {c.label}
                     </div>
                     <div className="stat-card-value">
                         {loading ? (
-                            <span style={{ fontSize: 16, color: "var(--text-muted)" }}>
-                                —
-                            </span>
+                            <span className="stat-card-pending">—</span>
                         ) : (
                             fmt(stats?.[c.key] ?? 0)
                         )}

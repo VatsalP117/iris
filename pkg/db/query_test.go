@@ -218,6 +218,61 @@ func TestGetVitalsUsesP75(t *testing.T) {
 	}
 }
 
+func TestGetStatsSupportsDateTimeAndDateWindows(t *testing.T) {
+	repo := newTestRepo(t)
+
+	base := time.Date(2026, 3, 25, 15, 0, 0, 0, time.UTC)
+	insertEvent(t, repo, core.Event{
+		EventName:   "$pageview",
+		Domain:      "example.com",
+		SiteID:      "site-a",
+		SessionID:   "s-older",
+		VisitorID:   "v-older",
+		ScreenWidth: 1280,
+		Timestamp:   base.Add(-25 * time.Hour),
+	})
+	insertEvent(t, repo, core.Event{
+		EventName:   "$pageview",
+		Domain:      "example.com",
+		SiteID:      "site-a",
+		SessionID:   "s-recent-1",
+		VisitorID:   "v-recent-1",
+		ScreenWidth: 1440,
+		Timestamp:   base.Add(-23 * time.Hour),
+	})
+	insertEvent(t, repo, core.Event{
+		EventName:   "$pageview",
+		Domain:      "example.com",
+		SiteID:      "site-a",
+		SessionID:   "s-recent-2",
+		VisitorID:   "v-recent-2",
+		ScreenWidth: 390,
+		Timestamp:   base.Add(-1 * time.Hour),
+	})
+
+	const sqlLayout = "2006-01-02 15:04:05"
+	stats24h, err := repo.GetStats(
+		context.Background(),
+		"site-a",
+		base.Add(-24*time.Hour).Format(sqlLayout),
+		base.Format(sqlLayout),
+	)
+	if err != nil {
+		t.Fatalf("GetStats(24h) returned error: %v", err)
+	}
+	if stats24h.Pageviews != 2 || stats24h.UniqueVisitors != 2 || stats24h.Sessions != 2 {
+		t.Fatalf("unexpected 24h stats: %+v", stats24h)
+	}
+
+	statsDay, err := repo.GetStats(context.Background(), "site-a", "2026-03-24", "2026-03-24")
+	if err != nil {
+		t.Fatalf("GetStats(day window) returned error: %v", err)
+	}
+	if statsDay.Pageviews != 2 {
+		t.Fatalf("expected 2 pageviews on 2026-03-24, got %+v", statsDay)
+	}
+}
+
 func newTestRepo(t *testing.T) *SqliteRepository {
 	t.Helper()
 

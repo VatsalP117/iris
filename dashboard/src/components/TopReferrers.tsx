@@ -21,7 +21,7 @@ export function TopReferrers({ referrers, loading }: Props) {
         <div className="card">
             <div className="card-header">
                 <span className="card-title">Top Referrers</span>
-                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                <span className="card-meta">
                     {referrers.length} sources
                 </span>
             </div>
