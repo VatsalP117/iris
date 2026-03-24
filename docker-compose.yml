@@ -9,7 +9,7 @@ services:
       - "8081:8080"
     volumes:
       # Mount the local data directory to persist the SQLite database
-      - ./data:/app/data
+      - ../files/iris-data:/app/data
     environment:
       - PORT=${PORT:-8080}
       - DB_PATH=${DB_PATH:-/app/data/iris.db}
