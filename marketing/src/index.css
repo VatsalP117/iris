@@ -2,54 +2,97 @@
 
 @config "../tailwind.config.js";
 
+:root {
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #111111;
+  --bg-tertiary: #171717;
+  --accent: #e5e5e5;
+  --accent-muted: #a3a3a3;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.12);
+}
+
 body {
-  @apply bg-background text-foreground antialiased selection:bg-accent/30 selection:text-foreground;
+  background-color: var(--bg-primary);
+  color: var(--accent);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .glass {
-  @apply bg-white/5 backdrop-blur-md border border-white/10;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.glass-hover:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-hover);
 }
 
 .text-gradient {
-  @apply bg-clip-text text-transparent bg-gradient-to-br from-white via-white/90 to-white/50;
+  color: var(--accent);
+  background: none;
 }
 
 .bg-grid {
-  background-size: 40px 40px;
+  background-size: 80px 80px;
   background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
 }
 
-/* Docs page styles */
-.docs-section {
-  @apply pb-16 mb-16 border-b border-white/5;
+.border-subtle {
+  border-color: var(--border-subtle);
 }
 
-.docs-section:last-of-type {
-  @apply border-b-0;
+.border-subtle-hover:hover {
+  border-color: var(--border-hover);
 }
 
-.docs-section h2 {
-  @apply text-3xl font-bold tracking-tight mb-4;
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.docs-section h3 {
-  @apply text-xl font-semibold mt-10 mb-3 text-foreground/90;
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.7; }
 }
 
-.docs-section h4 {
-  @apply text-lg font-semibold;
+.animate-fade-up {
+  animation: fade-up 0.6s ease-out forwards;
 }
 
-.docs-section p {
-  @apply text-muted-foreground leading-relaxed mb-4;
+.animate-delay-100 { animation-delay: 100ms; }
+.animate-delay-200 { animation-delay: 200ms; }
+.animate-delay-300 { animation-delay: 300ms; }
+.animate-delay-400 { animation-delay: 400ms; }
+.animate-delay-500 { animation-delay: 500ms; }
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
 }
 
-.docs-section code {
-  @apply text-primary bg-primary/10 px-1.5 py-0.5 rounded text-sm font-mono;
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
 }
 
-.docs-section pre code {
-  @apply bg-transparent p-0 text-white/90;
+::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #222;
 }

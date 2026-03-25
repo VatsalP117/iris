@@ -8,16 +8,17 @@ import {
   MousePointer2,
   Lock,
   Menu,
-  X
+  X,
+  ChevronRight
 } from 'lucide-react';
-import { useState } from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
 
-export const GitHubIcon = ({ className }: { className?: string }) => (
+const GitHubIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
     <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
   </svg>
 );
+import { useState } from 'react';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 
 const Nav = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -25,220 +26,293 @@ const Nav = () => {
   const isDocsPage = location.pathname === '/docs';
 
   return (
-    <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-background/80 backdrop-blur-xl">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <nav className="fixed top-0 w-full z-50 border-b border-subtle bg-background/80 backdrop-blur-sm">
+      <div className="max-w-6xl mx-auto px-6">
         <div className="flex justify-between h-16 items-center">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center font-bold text-white shadow-lg shadow-primary/20">
+          <Link to="/" className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-foreground text-background flex items-center justify-center font-bold text-sm">
               IR
             </div>
-            <span className="text-xl font-bold tracking-tight">Iris</span>
+            <span className="text-base font-medium tracking-tight">Iris</span>
           </Link>
 
-          <div className="hidden md:flex items-center space-x-8 text-sm font-medium text-muted-foreground">
-            {!isDocsPage && <a href="#features" className="hover:text-foreground transition-colors">Features</a>}
-            <Link to="/docs" className="hover:text-foreground transition-colors">Docs</Link>
-            <a href="https://github.com/VatsalP117/iris" className="hover:text-foreground transition-colors flex items-center gap-1.5">
-              <GitHubIcon className="w-4 h-4" /> GitHub
+          <div className="hidden md:flex items-center gap-8 text-sm">
+            {!isDocsPage && (
+              <a href="#features" className="text-muted hover:text-foreground transition-colors">
+                Features
+              </a>
+            )}
+            <Link to="/docs" className="text-muted hover:text-foreground transition-colors">
+              Docs
+            </Link>
+            <a 
+              href="https://github.com/VatsalP117/iris" 
+              className="text-muted hover:text-foreground transition-colors flex items-center gap-2"
+            >
+              <GitHubIcon className="w-4 h-4" />
+              GitHub
             </a>
-            <Link to="/docs" className="px-4 py-2 rounded-full bg-white text-background font-semibold hover:bg-white/90 transition-all">
+            <Link 
+              to="/docs" 
+              className="px-4 py-2 rounded-lg bg-foreground text-background font-medium text-sm hover:bg-white/90 transition-colors"
+            >
               Get Started
             </Link>
           </div>
 
-          <div className="md:hidden">
-            <button onClick={() => setIsOpen(!isOpen)} className="p-2">
-              {isOpen ? <X /> : <Menu />}
-            </button>
-          </div>
+          <button 
+            onClick={() => setIsOpen(!isOpen)} 
+            className="md:hidden p-2 text-muted hover:text-foreground"
+          >
+            {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
         </div>
       </div>
 
       {isOpen && (
-        <div className="md:hidden bg-background border-b border-white/5 p-4 space-y-4">
-          {!isDocsPage && <a href="#features" className="block text-muted-foreground px-2 py-1" onClick={() => setIsOpen(false)}>Features</a>}
-          <Link to="/docs" className="block text-muted-foreground px-2 py-1" onClick={() => setIsOpen(false)}>Docs</Link>
-          <a href="https://github.com/VatsalP117/iris" className="block text-muted-foreground px-2 py-1" onClick={() => setIsOpen(false)}>GitHub</a>
-          <Link to="/docs" className="block w-full px-4 py-2 rounded-lg bg-white text-background font-semibold text-center" onClick={() => setIsOpen(false)}>Get Started</Link>
+        <div className="md:hidden border-t border-subtle bg-background px-6 py-4 space-y-3">
+          {!isDocsPage && (
+            <a href="#features" className="block text-muted py-2" onClick={() => setIsOpen(false)}>
+              Features
+            </a>
+          )}
+          <Link to="/docs" className="block text-muted py-2" onClick={() => setIsOpen(false)}>
+            Docs
+          </Link>
+          <a href="https://github.com/VatsalP117/iris" className="block text-muted py-2" onClick={() => setIsOpen(false)}>
+            GitHub
+          </a>
+          <Link 
+            to="/docs" 
+            className="block w-full px-4 py-2.5 rounded-lg bg-foreground text-background font-medium text-center" 
+            onClick={() => setIsOpen(false)}
+          >
+            Get Started
+          </Link>
         </div>
       )}
     </nav>
   );
 };
 
-const FeatureCard = ({ icon: Icon, title, description }: { icon: any, title: string, description: string }) => (
+const FeatureCard = ({ 
+  icon: Icon, 
+  title, 
+  description, 
+  delay = 0 
+}: { 
+  icon: any; 
+  title: string; 
+  description: string; 
+  delay?: number 
+}) => (
   <motion.div
-    whileHover={{ y: -5 }}
-    className="p-8 rounded-3xl glass relative overflow-hidden group"
+    initial={{ opacity: 0, y: 20 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true }}
+    transition={{ duration: 0.5, delay }}
+    className="p-6 rounded-xl border border-subtle glass-hover transition-colors group"
   >
-    <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-      <Icon className="w-24 h-24" />
+    <div className="w-10 h-10 rounded-lg bg-foreground/5 flex items-center justify-center mb-4 group-hover:bg-foreground/10 transition-colors">
+      <Icon className="w-5 h-5 text-muted-foreground" />
     </div>
-    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-6 border border-white/10">
-      <Icon className="w-6 h-6 text-primary" />
-    </div>
-    <h3 className="text-xl font-bold mb-3">{title}</h3>
-    <p className="text-muted-foreground leading-relaxed">{description}</p>
+    <h3 className="text-base font-medium mb-2">{title}</h3>
+    <p className="text-sm text-muted leading-relaxed">{description}</p>
   </motion.div>
 );
 
 export function Home() {
   return (
-    <main className="relative pt-32">
-      {/* Hero Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center py-20">
+    <main className="pt-32 pb-20">
+      {/* Hero */}
+      <section className="max-w-6xl mx-auto px-6 text-center py-20">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.6 }}
         >
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20 mb-8">
-            v0.1.0 — Now in Public Alpha
+          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-foreground/5 text-muted-foreground border border-subtle mb-8">
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground" />
+            v0.1.0 — Public Alpha
           </span>
-          <h1 className="text-6xl md:text-8xl font-extrabold tracking-tighter mb-8 text-gradient">
-            Own Your Analytics. <br />
-            <span className="text-white/40">Keep Your Privacy.</span>
+
+          <h1 className="text-5xl md:text-7xl font-semibold tracking-tight mb-6">
+            Own your analytics.
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-12 leading-relaxed">
+          <h1 className="text-5xl md:text-7xl font-semibold tracking-tight text-muted mb-8">
+            Keep your privacy.
+          </h1>
+
+          <p className="text-lg text-muted max-w-xl mx-auto mb-10 leading-relaxed">
             The lightweight, self-hosted web analytics platform built for developers.
             Single Docker container. 100% data ownership. Zero cookies.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link to="/docs" className="w-full sm:w-auto px-8 py-4 rounded-full bg-white text-black font-bold text-lg hover:scale-105 transition-all flex items-center justify-center gap-2">
-              Deploy in 5 minutes <ArrowRight className="w-5 h-5" />
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Link 
+              to="/docs" 
+              className="w-full sm:w-auto px-6 py-3 rounded-lg bg-foreground text-background font-medium text-sm hover:bg-white/90 transition-colors inline-flex items-center justify-center gap-2"
+            >
+              Deploy in 5 minutes 
+              <ArrowRight className="w-4 h-4" />
             </Link>
-            <a href="https://github.com/VatsalP117/iris" className="w-full sm:w-auto px-8 py-4 rounded-full bg-white/5 border border-white/10 text-white font-bold text-lg hover:bg-white/10 transition-all flex items-center justify-center gap-2">
-              <GitHubIcon className="w-5 h-5" /> View on GitHub
+            <a 
+              href="https://github.com/VatsalP117/iris" 
+              className="w-full sm:w-auto px-6 py-3 rounded-lg border border-subtle text-sm font-medium hover:bg-foreground/5 transition-colors inline-flex items-center justify-center gap-2"
+            >
+              <GitHubIcon className="w-4 h-4" />
+              View on GitHub
             </a>
           </div>
         </motion.div>
 
-        {/* Abstract Terminal/Visual */}
+        {/* Terminal */}
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.8 }}
-          className="mt-24 relative max-w-4xl mx-auto"
+          className="mt-20 max-w-2xl mx-auto"
         >
-          <div className="absolute -inset-4 bg-gradient-to-r from-primary/20 to-accent/20 blur-3xl opacity-30 animate-pulse" />
-          <div className="relative glass rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
-            <div className="bg-white/5 px-4 py-3 flex items-center gap-1.5 border-b border-white/10">
-              <div className="w-3 h-3 rounded-full bg-red-500/50" />
-              <div className="w-3 h-3 rounded-full bg-yellow-500/50" />
-              <div className="w-3 h-3 rounded-full bg-green-500/50" />
-              <span className="text-[10px] text-muted-foreground font-mono ml-4">iris-deploy.sh</span>
+          <div className="rounded-xl border border-subtle overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-subtle flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full bg-foreground/20" />
+              <div className="w-2.5 h-2.5 rounded-full bg-foreground/20" />
+              <div className="w-2.5 h-2.5 rounded-full bg-foreground/20" />
+              <span className="text-xs text-muted ml-2 font-mono">iris-deploy.sh</span>
             </div>
-            <div className="p-8 text-left font-mono text-sm leading-relaxed overflow-x-auto whitespace-nowrap bg-black/40">
-              <p className="text-primary">$ <span className="text-white">docker run -d -p 8080:8080 \</span></p>
-              <p className="pl-4 text-white">  -v ./data:/app/data \</p>
-              <p className="pl-4 text-white">  -e SITE_ID="my-cool-site" \</p>
-              <p className="pl-4 text-white font-bold">  ghcr.io/iris/iris:latest</p>
+            <div className="p-5 text-left font-mono text-sm bg-bg-secondary">
+              <p><span className="text-muted">$</span> docker run -d -p 8080:8080 \</p>
+              <p className="pl-4">-v ./data:/app/data \</p>
+              <p className="pl-4">-e SITE_ID="my-site" \</p>
+              <p className="pl-4">ghcr.io/iris/iris:latest</p>
               <br />
-              <p className="text-green-400">✓ Server listening on :8080</p>
-              <p className="text-green-400">✓ Database initialized (SQLite)</p>
-              <p className="text-green-400">✓ Dashboard available at /dashboard</p>
+              <p className="text-muted">✓ Server listening on :8080</p>
+              <p className="text-muted">✓ Database initialized</p>
+              <p className="text-muted">✓ Dashboard ready</p>
             </div>
           </div>
         </motion.div>
       </section>
 
-      {/* Features Section */}
-      <section id="features" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Features */}
+      <section id="features" className="max-w-6xl mx-auto px-6 py-24">
+        <div className="text-center mb-12">
+          <h2 className="text-2xl md:text-3xl font-semibold tracking-tight mb-4">
+            Everything you need
+          </h2>
+          <p className="text-muted max-w-lg mx-auto">
+            Track your visitors without compromising their privacy or your control.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <FeatureCard
             icon={ShieldCheck}
             title="Privacy-First"
-            description="Fully anonymous, cookieless tracking out of the box. No GDPR consent banners required because you don't track personal data."
+            description="Fully anonymous, cookieless tracking. No GDPR consent banners required."
+            delay={0}
           />
           <FeatureCard
             icon={Container}
             title="Single Binary"
-            description="A single Docker image contains the Go backend, SQLite database, and the analytics dashboard. No complex setup."
+            description="Go backend, SQLite, and dashboard in one Docker image. No complex setup."
+            delay={0.1}
           />
           <FeatureCard
             icon={Zap}
             title="Lightning Fast"
-            description="Built with Go and React. The SDK uses navigator.sendBeacon to ensure zero impact on your site's performance."
+            description="Built with Go. Uses navigator.sendBeacon for zero performance impact."
+            delay={0.2}
           />
           <FeatureCard
             icon={Database}
             title="Own Your Data"
-            description="Your data never leaves your server. No third-party scripts, no cross-site tracking, and no selling of visitor info."
+            description="Your data never leaves your server. No third-party scripts or tracking."
+            delay={0.3}
           />
           <FeatureCard
             icon={MousePointer2}
             title="Auto-capture"
-            description="Automatically track clicks and pageviews without writing manual event handlers for every element."
+            description="Automatically track clicks and pageviews without manual event handlers."
+            delay={0.4}
           />
           <FeatureCard
             icon={Lock}
             title="Self-Hosted"
-            description="Full control over your infrastructure. Deploy on any VPS, Raspberry Pi, or home server in seconds."
+            description="Full control over your infrastructure. Deploy anywhere in seconds."
+            delay={0.5}
           />
         </div>
       </section>
 
-      {/* Integration Section */}
-      <section id="integration" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 border-t border-white/5">
-        <div className="flex flex-col lg:flex-row items-center gap-16">
+      {/* Integration */}
+      <section className="max-w-6xl mx-auto px-6 py-24 border-t border-subtle">
+        <div className="flex flex-col lg:flex-row items-center gap-12">
           <div className="flex-1">
-            <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">Integrate in <span className="text-primary underline decoration-primary/30 underline-offset-8">seconds</span>.</h2>
-            <p className="text-lg text-muted-foreground leading-relaxed mb-8">
-              Installing Iris is as simple as adding a single script tag or using our lightweight npm package.
-              Everything is optimized for the modern web.
+            <h2 className="text-2xl md:text-3xl font-semibold mb-4 tracking-tight">
+              Integrate in seconds
+            </h2>
+            <p className="text-muted leading-relaxed mb-6">
+              Add a script tag or use our npm package. Everything is optimized for modern web development.
             </p>
-            <ul className="space-y-4">
+            <ul className="space-y-3">
               {[
                 "No configuration required",
-                "TypeScript first SDK",
-                "Supports Next.js, Remix, and SPAs",
+                "TypeScript SDK",
+                "Supports Next.js, Remix, SPAs",
                 "Automatic Web Vitals tracking"
               ].map((item, i) => (
-                <li key={i} className="flex items-center gap-3 font-medium">
-                  <div className="w-5 h-5 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center">
-                    <Zap className="w-3 h-3 text-green-500" />
-                  </div>
-                  {item}
+                <li key={i} className="flex items-center gap-3 text-sm">
+                  <ChevronRight className="w-4 h-4 text-muted" />
+                  <span className="text-muted-foreground">{item}</span>
                 </li>
               ))}
             </ul>
           </div>
-          <div className="flex-1 w-full">
-            <div className="glass rounded-3xl overflow-hidden border border-white/10 shadow-2xl">
-              <div className="bg-white/5 p-4 flex items-center gap-2">
-                <div className="px-3 py-1 rounded-md bg-primary/20 text-primary text-[10px] font-bold uppercase tracking-wider">SDK</div>
-                <span className="text-[11px] text-muted-foreground font-mono">index.ts</span>
-              </div>
-              <div className="p-8 font-mono text-sm leading-relaxed overflow-x-auto bg-black/20">
-                <p className="text-muted-foreground italic">// Install iris-analytics</p>
-                <p className="mb-4"><span className="text-primary">import</span> &#123; Iris &#125; <span className="text-primary">from</span> <span className="text-green-400">'iris-analytics'</span>;</p>
 
-                <p className="text-muted-foreground italic">// Initialize</p>
-                <p className="text-white">const <span className="text-accent">iris</span> = new <span className="text-yellow-400">Iris</span>(&#123;</p>
-                <p className="pl-4">host: <span className="text-green-400">'https://your-iris.com'</span>,</p>
-                <p className="pl-4">siteId: <span className="text-green-400">'marketing-site'</span></p>
-                <p className="text-white">&#125;);</p>
+          <div className="flex-1 w-full">
+            <div className="rounded-xl border border-subtle overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-subtle flex items-center gap-2">
+                <span className="text-xs font-medium text-muted-foreground">SDK</span>
+                <span className="text-xs text-muted font-mono">index.ts</span>
+              </div>
+              <div className="p-5 font-mono text-sm bg-bg-secondary">
+                <p className="text-muted">// Install</p>
+                <p className="mb-3"><span className="text-foreground">import</span> &#123; Iris &#125; <span className="text-foreground">from</span> <span className="text-muted">'iris-analytics'</span>;</p>
+                
+                <p className="text-muted">// Initialize</p>
+                <p className="text-foreground">const <span className="text-foreground">iris</span> = new <span className="text-foreground">Iris</span>(&#123;</p>
+                <p className="pl-4">host: <span className="text-muted">'https://your-iris.com'</span>,</p>
+                <p className="pl-4">siteId: <span className="text-muted">'my-site'</span></p>
+                <p className="text-foreground">&#125;);</p>
                 <br />
-                <p className="text-accent">iris.<span className="text-white">start</span>();</p>
+                <p className="text-foreground">iris.<span className="text-foreground">start</span>();</p>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Call to Action */}
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-32 text-center">
-        <div className="p-16 rounded-[3rem] bg-gradient-to-br from-primary/20 via-accent/10 to-transparent border border-white/10 relative overflow-hidden group">
-          <div className="absolute top-0 left-0 w-full h-full bg-grid opacity-10" />
-          <h2 className="text-4xl md:text-5xl font-bold mb-8 relative z-10">Ready to own your data?</h2>
-          <p className="text-lg text-muted-foreground mb-12 max-w-xl mx-auto relative z-10 leading-relaxed">
-            Join hundreds of developers who have switched to a more private, faster, and simpler analytics tool.
+      {/* CTA */}
+      <section className="max-w-4xl mx-auto px-6 py-24 text-center">
+        <div className="p-12 rounded-2xl border border-subtle">
+          <h2 className="text-2xl md:text-3xl font-semibold mb-4">
+            Ready to own your data?
+          </h2>
+          <p className="text-muted mb-8 max-w-md mx-auto">
+            Join developers who have switched to a more private, faster analytics tool.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 relative z-10">
-            <Link to="/docs" className="w-full sm:w-auto px-10 py-5 rounded-full bg-white text-black font-bold text-xl hover:scale-105 transition-all">
-              Get Started Now
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Link 
+              to="/docs" 
+              className="px-6 py-3 rounded-lg bg-foreground text-background font-medium text-sm hover:bg-white/90 transition-colors"
+            >
+              Get Started
             </Link>
-            <Link to="/docs" className="w-full sm:w-auto px-10 py-5 rounded-full bg-white/5 border border-white/10 text-white font-bold text-xl hover:bg-white/10 transition-all">
+            <Link 
+              to="/docs" 
+              className="px-6 py-3 rounded-lg border border-subtle text-sm font-medium hover:bg-foreground/5 transition-colors"
+            >
               Read the Docs
             </Link>
           </div>
@@ -250,25 +324,29 @@ export function Home() {
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-background selection:bg-primary/30">
-      <div className="fixed inset-0 bg-grid pointer-events-none opacity-20" />
-      <div className="fixed inset-0 bg-gradient-radial from-primary/5 via-transparent to-transparent pointer-events-none" />
+    <div className="min-h-screen bg-background">
+      <div className="fixed inset-0 bg-grid pointer-events-none" />
 
       <Nav />
       <Outlet />
 
-      <footer className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 border-t border-white/5 text-center text-muted-foreground text-sm">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-8">
-          <Link to="/" className="flex items-center gap-2 text-foreground font-bold">
-            <div className="w-6 h-6 rounded bg-gradient-to-br from-primary to-accent flex items-center justify-center text-[10px] text-white">IR</div>
+      <footer className="max-w-6xl mx-auto px-6 py-12 border-t border-subtle">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+          <Link to="/" className="flex items-center gap-2 text-sm font-medium">
+            <div className="w-5 h-5 rounded bg-foreground text-background flex items-center justify-center text-[8px] font-bold">
+              IR
+            </div>
             Iris Analytics
           </Link>
-          <div className="flex items-center gap-8">
-            <a href="https://github.com/VatsalP117/iris" className="hover:text-foreground">GitHub</a>
-            <a href="#" className="hover:text-foreground">Discord</a>
-            <a href="#" className="hover:text-foreground">Twitter</a>
+          <div className="flex items-center gap-6 text-sm text-muted">
+            <a href="https://github.com/VatsalP117/iris" className="hover:text-foreground transition-colors">
+              GitHub
+            </a>
+            <a href="#" className="hover:text-foreground transition-colors">
+              Discord
+            </a>
           </div>
-          <p>© 2026 Iris Analytics. Built for the privacy-conscious web.</p>
+          <p className="text-xs text-muted">© 2026 Iris Analytics</p>
         </div>
       </footer>
     </div>
