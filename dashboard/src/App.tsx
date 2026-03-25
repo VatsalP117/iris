@@ -187,9 +187,6 @@ export default function App() {
 
     const emptyBuckets = buildEmptyBuckets(windowRange.from, windowRange.to);
     const siteId = selectedSite?.site_id ?? "";
-    const domainSummary = selectedSite?.domains?.length
-        ? selectedSite.domains.join(", ")
-        : selectedSite?.domain ?? "";
 
     return (
         <div className="app-layout">
@@ -235,18 +232,7 @@ export default function App() {
                     <div className="topbar-left">
                         {siteId ? (
                             <div className="topbar-site-stack">
-                                <div className="topbar-site-row">
-                                    <span className="domain-badge">{siteId}</span>
-                                    {domainSummary && domainSummary !== siteId && (
-                                        <span
-                                            className="topbar-domains"
-                                            title={domainSummary}
-                                        >
-                                            {domainSummary}
-                                        </span>
-                                    )}
-                                </div>
-                                <span className="topbar-range">{formatWindow(windowRange, preset)}</span>
+                                <span className="domain-badge">{siteId}</span>
                             </div>
                         ) : (
                             <span className="topbar-title-muted">
