@@ -67,6 +67,9 @@ export const api = {
     timeseries: (siteId: string, from: string, to: string) =>
         get<{ date: string; pageviews: number }[]>(`/api/timeseries?${buildParams(siteId, from, to)}`),
 
+    uniqueVisitorsTimeseries: (siteId: string, from: string, to: string) =>
+        get<{ date: string; uniqueVisitors: number }[]>(`/api/timeseries/visitors?${buildParams(siteId, from, to)}`),
+
     sites: () =>
         get<SiteStat[]>(`/api/sites`),
 };

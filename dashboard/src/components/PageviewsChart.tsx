@@ -11,11 +11,13 @@ import { format, subDays, eachDayOfInterval, parseISO } from "date-fns";
 
 export interface DayBucket {
     date: string; // "YYYY-MM-DD"
-    pageviews: number;
+    pageviews?: number;
+    uniqueVisitors?: number;
 }
 
 interface Props {
-    data: DayBucket[];
+    pageviewsData: DayBucket[];
+    visitorsData: DayBucket[];
     loading: boolean;
     from: Date;
     to: Date;
@@ -23,43 +25,44 @@ interface Props {
 
 const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
+    const isVisitors = payload[0].dataKey === "uniqueVisitors";
     return (
         <div
             style={{
-                background: "var(--bg-elevated)",
+                background: "var(--bg-secondary)",
                 border: "1px solid var(--border)",
                 borderRadius: "var(--radius-md)",
                 padding: "10px 14px",
                 fontSize: 13,
             }}
         >
-            <div style={{ color: "var(--text-muted)", marginBottom: 4 }}>
+            <div style={{ color: "var(--text-tertiary)", marginBottom: 4 }}>
                 {format(parseISO(label), "MMM d, yyyy")}
             </div>
-            <div style={{ color: "var(--accent)", fontWeight: 600 }}>
-                {payload[0].value.toLocaleString()} pageviews
+            <div style={{ color: "var(--brand)", fontWeight: 600 }}>
+                {payload[0].value.toLocaleString()} {isVisitors ? "unique visitors" : "pageviews"}
             </div>
         </div>
     );
 };
 
-export function PageviewsChart({ data, loading, from, to }: Props) {
-    // Zero-fill the entire date range so the chart always shows the full window
+export function PageviewsChart({ pageviewsData, visitorsData, loading, from, to }: Props) {
     const allDays = eachDayOfInterval({ start: from, end: to });
-    const byDate = Object.fromEntries(data.map((d) => [d.date, d.pageviews]));
+    const byDatePV = Object.fromEntries(pageviewsData.map((d) => [d.date, d.pageviews]));
+    const byDateUV = Object.fromEntries(visitorsData.map((d) => [d.date, d.uniqueVisitors ?? 0]));
     const chartData = allDays.map((d) => {
         const key = format(d, "yyyy-MM-dd");
-        return { date: key, pageviews: byDate[key] ?? 0 };
+        return { date: key, pageviews: byDatePV[key] ?? 0, uniqueVisitors: byDateUV[key] ?? 0 };
     });
     const isShortWindow = to.getTime() - from.getTime() <= 36 * 60 * 60 * 1000;
     const windowLabel = isShortWindow
         ? `${format(from, "MMM d, p")} - ${format(to, "MMM d, p")}`
         : `${format(from, "MMM d")} - ${format(to, "MMM d, yyyy")}`;
 
-    return (
+return (
         <div className="card full-width">
             <div className="card-header">
-                <span className="card-title">Pageviews Over Time</span>
+                <span className="card-title">Traffic Overview</span>
                 <span className="card-meta">{windowLabel}</span>
             </div>
             <div className="card-body" style={{ height: 220 }}>
@@ -74,13 +77,13 @@ export function PageviewsChart({ data, loading, from, to }: Props) {
                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
                             <XAxis
                                 dataKey="date"
-                                tick={{ fontSize: 11, fill: "var(--text-muted)" }}
+                                tick={{ fontSize: 11, fill: "var(--text-tertiary)" }}
                                 tickFormatter={(v) => format(parseISO(v), "MMM d")}
                                 axisLine={false}
                                 tickLine={false}
                             />
                             <YAxis
-                                tick={{ fontSize: 11, fill: "var(--text-muted)" }}
+                                tick={{ fontSize: 11, fill: "var(--text-tertiary)" }}
                                 axisLine={false}
                                 tickLine={false}
                                 allowDecimals={false}
@@ -88,11 +91,20 @@ export function PageviewsChart({ data, loading, from, to }: Props) {
                             <Tooltip content={<CustomTooltip />} />
                             <Line
                                 type="monotone"
-                                dataKey="pageviews"
-                                stroke="var(--accent)"
+                                dataKey="uniqueVisitors"
+                                stroke="var(--brand)"
                                 strokeWidth={2}
                                 dot={false}
-                                activeDot={{ r: 4, fill: "var(--accent)" }}
+                                activeDot={{ r: 4, fill: "var(--brand)" }}
+                            />
+                            <Line
+                                type="monotone"
+                                dataKey="pageviews"
+                                stroke="var(--text-tertiary)"
+                                strokeWidth={2}
+                                strokeDasharray="4 4"
+                                dot={false}
+                                activeDot={{ r: 4, fill: "var(--text-tertiary)" }}
                             />
                         </LineChart>
                     </ResponsiveContainer>

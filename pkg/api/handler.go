@@ -187,6 +187,19 @@ func (h *Handler) GetTimeSeries(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *Handler) GetUniqueVisitorsTimeSeries(w http.ResponseWriter, r *http.Request) {
+	q, ok := parseStatsQuery(w, r)
+	if !ok {
+		return
+	}
+	result, err := h.Repo.GetUniqueVisitorsTimeSeries(r.Context(), q.SiteID, q.From, q.To)
+	if err != nil {
+		http.Error(w, "Query failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *Handler) ListSites(w http.ResponseWriter, r *http.Request) {
 	result, err := h.Repo.GetSites(r.Context())
 	if err != nil {

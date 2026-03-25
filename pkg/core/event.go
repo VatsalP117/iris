@@ -52,8 +52,9 @@ type SiteStat struct {
 }
 
 type TimeSeriesBucket struct {
-	Date      string `json:"date"` // "YYYY-MM-DD" in UTC
-	Pageviews int    `json:"pageviews"`
+	Date           string `json:"date"` // "YYYY-MM-DD" in UTC
+	Pageviews      int    `json:"pageviews"`
+	UniqueVisitors int    `json:"uniqueVisitors,omitempty"`
 }
 
 type EventRepository interface {
@@ -65,6 +66,7 @@ type EventRepository interface {
 	GetVitals(ctx context.Context, siteKey, from, to string) ([]VitalStat, error)
 	GetDevices(ctx context.Context, siteKey, from, to string) ([]DeviceStat, error)
 	GetPageviewsTimeSeries(ctx context.Context, siteKey, from, to string) ([]TimeSeriesBucket, error)
+	GetUniqueVisitorsTimeSeries(ctx context.Context, siteKey, from, to string) ([]TimeSeriesBucket, error)
 	GetSites(ctx context.Context) ([]SiteStat, error)
 	Close() error
 }

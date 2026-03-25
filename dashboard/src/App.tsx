@@ -121,6 +121,7 @@ export default function App() {
     const [vitals, setVitals] = useState<VitalStat[]>([]);
     const [devices, setDevices] = useState<DeviceStat[]>([]);
     const [chartData, setChartData] = useState<DayBucket[]>([]);
+    const [visitorsData, setVisitorsData] = useState<DayBucket[]>([]);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -138,13 +139,14 @@ export default function App() {
         if (!siteId) return;
         setLoading(true);
         try {
-            const [s, p, r, v, dev, ts] = await Promise.all([
+            const [s, p, r, v, dev, ts, uv] = await Promise.all([
                 api.stats(siteId, range.queryFrom, range.queryTo),
                 api.pages(siteId, range.queryFrom, range.queryTo),
                 api.referrers(siteId, range.queryFrom, range.queryTo),
                 api.vitals(siteId, range.queryFrom, range.queryTo),
                 api.devices(siteId, range.queryFrom, range.queryTo),
                 api.timeseries(siteId, range.queryFrom, range.queryTo),
+                api.uniqueVisitorsTimeseries(siteId, range.queryFrom, range.queryTo),
             ]);
             setStats(s);
             setPages(p ?? []);
@@ -152,6 +154,7 @@ export default function App() {
             setVitals(v ?? []);
             setDevices(dev ?? []);
             setChartData(ts ?? []);
+            setVisitorsData(uv ?? []);
         } catch (err) {
             console.error("Iris: fetch error", err);
         } finally {
@@ -323,7 +326,8 @@ export default function App() {
                             {activeTab === "overview" && (
                                 <div className="dashboard-grid">
                                     <PageviewsChart
-                                        data={chartData.length ? chartData : emptyBuckets}
+                                        pageviewsData={chartData.length ? chartData : emptyBuckets}
+                                        visitorsData={visitorsData.length ? visitorsData : emptyBuckets}
                                         loading={loading}
                                         from={windowRange.from}
                                         to={windowRange.to}
