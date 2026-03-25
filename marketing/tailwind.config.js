@@ -7,34 +7,18 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: "#030712", // Very dark blue/black
-        foreground: "#f9fafb",
-        primary: {
-          DEFAULT: "#3b82f6", // Bright blue
-          foreground: "#ffffff",
-        },
-        secondary: {
-          DEFAULT: "#1f2937",
-          foreground: "#f9fafb",
-        },
-        accent: {
-          DEFAULT: "#8b5cf6", // Purple/Violet
-          foreground: "#ffffff",
-        },
+        background: "#0a0a0a",
+        "bg-secondary": "#111111",
+        foreground: "#e5e5e5",
         muted: {
-          DEFAULT: "#111827",
-          foreground: "#9ca3af",
+          DEFAULT: "#737373",
+          foreground: "#a3a3a3",
         },
-        border: "rgba(255, 255, 255, 0.1)",
+        border: "rgba(255, 255, 255, 0.06)",
       },
       fontFamily: {
-        sans: ["Inter", "sans-serif"],
-        display: ["Cal Sans", "Inter", "sans-serif"],
+        sans: ["Inter", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "monospace"],
-      },
-      backgroundImage: {
-        "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
-        "gradient-conic": "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
       },
     },
   },
