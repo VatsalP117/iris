@@ -1,5 +1,10 @@
 const VID_KEY = "iris_vid";
+const VID_DAY_KEY = "iris_vid_day";
 const SID_KEY = "iris_sid";
+
+let memoryVID = "";
+let memoryVIDDay = "";
+let memorySID = "";
 
 function generateId(): string {
     if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -12,20 +17,33 @@ function generateId(): string {
     });
 }
 
+function currentUTCDateKey(): string {
+    return new Date().toISOString().slice(0, 10);
+}
+
 /**
- * Returns a stable anonymous visitor ID stored in localStorage.
- * Persists across sessions (same device/browser).
+ * Returns an anonymous visitor ID that rotates once per UTC day.
+ * Stays stable for a given browser/profile within the same UTC day.
  */
 export function getVisitorId(): string {
+    const today = currentUTCDateKey();
+
     try {
+        const savedDay = localStorage.getItem(VID_DAY_KEY);
         let vid = localStorage.getItem(VID_KEY);
-        if (!vid) {
+        if (!vid || savedDay !== today) {
             vid = generateId();
             localStorage.setItem(VID_KEY, vid);
+            localStorage.setItem(VID_DAY_KEY, today);
         }
         return vid;
     } catch {
-        return generateId();
+        // Storage can fail in privacy modes. Keep IDs stable in memory for this page lifecycle.
+        if (!memoryVID || memoryVIDDay !== today) {
+            memoryVID = generateId();
+            memoryVIDDay = today;
+        }
+        return memoryVID;
     }
 }
 
@@ -42,6 +60,9 @@ export function getSessionId(): string {
         }
         return sid;
     } catch {
-        return generateId();
+        if (!memorySID) {
+            memorySID = generateId();
+        }
+        return memorySID;
     }
 }

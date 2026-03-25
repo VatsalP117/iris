@@ -20,7 +20,7 @@ The entire system is packaged as a **single Docker container**. The Go binary se
 flowchart LR
     subgraph "Visitor Browser"
         SDK["iris-analytics\n(web/src/index.ts)"]
-        LS["localStorage\niris_vid"]
+        LS["localStorage\niris_vid + iris_vid_day"]
         SS["sessionStorage\niris_sid"]
     end
 
@@ -66,7 +66,7 @@ Defines the two public types:
 
 #### [storage.ts](file:///Users/vatsalpatel/Desktop/iris/web/src/storage.ts)
 Identity layer — **fully anonymous**, no cookies.
-- **Visitor ID (`iris_vid`)** → `localStorage` — persists across sessions on same browser/device
+- **Visitor ID (`iris_vid`)** → `localStorage` — rotates once per UTC day (`iris_vid_day`), stays stable within that day
 - **Session ID (`iris_sid`)** → `sessionStorage` — unique per browser tab/session, cleared on tab close
 - Falls back to a UUID v4 polyfill for old environments
 

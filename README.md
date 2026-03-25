@@ -133,5 +133,5 @@ When running the Go backend, you can configure it using the following environmen
 
 ## 5. Security & Privacy
 
-* **No Cookies:** User identity is tracked anonymously using standard `localStorage` (Visitor ID) and `sessionStorage` (Session ID). No third-party cookies are used.
+* **No Cookies:** User identity is tracked anonymously using standard `localStorage` (Visitor ID, rotated daily in UTC) and `sessionStorage` (Session ID). No third-party cookies are used.
 * **CORS:** The backend allows cross-origin browser requests by default so the SDK and hosted dashboard can talk to the API without additional setup.
