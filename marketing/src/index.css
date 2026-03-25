@@ -20,3 +20,36 @@ body {
     linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
 }
+
+/* Docs page styles */
+.docs-section {
+  @apply pb-16 mb-16 border-b border-white/5;
+}
+
+.docs-section:last-of-type {
+  @apply border-b-0;
+}
+
+.docs-section h2 {
+  @apply text-3xl font-bold tracking-tight mb-4;
+}
+
+.docs-section h3 {
+  @apply text-xl font-semibold mt-10 mb-3 text-foreground/90;
+}
+
+.docs-section h4 {
+  @apply text-lg font-semibold;
+}
+
+.docs-section p {
+  @apply text-muted-foreground leading-relaxed mb-4;
+}
+
+.docs-section code {
+  @apply text-primary bg-primary/10 px-1.5 py-0.5 rounded text-sm font-mono;
+}
+
+.docs-section pre code {
+  @apply bg-transparent p-0 text-white/90;
+}
