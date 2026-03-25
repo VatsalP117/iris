@@ -1,8 +1,24 @@
 {
   "name": "iris-analytics",
-  "version": "0.2.1",
-  "description": "Privacy-first, self-hosted analytics client",
+  "version": "0.2.2",
+  "description": "Privacy-first, self-hosted web analytics SDK with daily rotating visitor IDs",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VatsalP117/iris.git",
+    "directory": "web"
+  },
+  "homepage": "https://github.com/VatsalP117/iris/tree/main/web",
+  "bugs": {
+    "url": "https://github.com/VatsalP117/iris/issues"
+  },
+  "keywords": [
+    "analytics",
+    "privacy",
+    "self-hosted",
+    "web-analytics",
+    "typescript"
+  ],
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
