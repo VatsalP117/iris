@@ -76,6 +76,37 @@ function getRangeLabel(preset: PresetKey): string {
 }
 
 export default function App() {
+    const [theme, setTheme] = useState<"dark" | "light">(() => {
+        const saved = localStorage.getItem("iris-theme");
+        return (saved as "dark" | "light") || "dark";
+    });
+
+    useEffect(() => {
+        document.documentElement.setAttribute("data-theme", theme);
+        localStorage.setItem("iris-theme", theme);
+    }, [theme]);
+
+    const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
+
+    const SunIcon = () => (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+    );
+
+    const MoonIcon = () => (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+    );
     const [sites, setSites] = useState<SiteStat[]>([]);
     const [sitesLoading, setSitesLoading] = useState(true);
     const [selectedSite, setSelectedSite] = useState<SiteStat | null>(null);
@@ -165,26 +196,37 @@ export default function App() {
             <aside className="sidebar">
                 <div className="sidebar-logo">
                     <div className="sidebar-logo-icon">IR</div>
-                    <div className="sidebar-logo-copy">
-                        <span className="sidebar-logo-text">Iris Analytics</span>
-                        <span className="sidebar-logo-subtext">Self-hosted insights</span>
-                    </div>
+                    <span className="sidebar-logo-text">Iris</span>
                 </div>
 
-                <span className="sidebar-section-label">Sections</span>
+                <span className="sidebar-section-label">Menu</span>
 
                 <nav className="sidebar-nav" aria-label="Dashboard tabs">
-                    <SidebarItem icon="OV" label="Overview" active={activeTab === "overview"} onClick={() => setActiveTab("overview")} />
-                    <SidebarItem icon="PG" label="Pages" active={activeTab === "pages"} onClick={() => setActiveTab("pages")} />
-                    <SidebarItem icon="RF" label="Referrers" active={activeTab === "referrers"} onClick={() => setActiveTab("referrers")} />
-                    <SidebarItem icon="WV" label="Web Vitals" active={activeTab === "vitals"} onClick={() => setActiveTab("vitals")} />
-                    <SidebarItem icon="DV" label="Devices" active={activeTab === "devices"} onClick={() => setActiveTab("devices")} />
+                    <button className={`sidebar-item ${activeTab === "overview" ? "active" : ""}`} onClick={() => setActiveTab("overview")}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        <span className="sidebar-item-label">Overview</span>
+                    </button>
+                    <button className={`sidebar-item ${activeTab === "pages" ? "active" : ""}`} onClick={() => setActiveTab("pages")}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        <span className="sidebar-item-label">Pages</span>
+                    </button>
+                    <button className={`sidebar-item ${activeTab === "referrers" ? "active" : ""}`} onClick={() => setActiveTab("referrers")}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                        <span className="sidebar-item-label">Referrers</span>
+                    </button>
+                    <button className={`sidebar-item ${activeTab === "vitals" ? "active" : ""}`} onClick={() => setActiveTab("vitals")}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                        <span className="sidebar-item-label">Web Vitals</span>
+                    </button>
+                    <button className={`sidebar-item ${activeTab === "devices" ? "active" : ""}`} onClick={() => setActiveTab("devices")}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                        <span className="sidebar-item-label">Devices</span>
+                    </button>
                 </nav>
 
                 <div className="sidebar-footnote">
-                    <span className="sidebar-footnote-label">Build</span>
+                    <span className="sidebar-footnote-label">Version</span>
                     <span className="sidebar-footnote-value">v0.1.0</span>
-                    <span className="sidebar-footnote-meta">Analytics updates on refresh</span>
                 </div>
             </aside>
 
@@ -253,6 +295,14 @@ export default function App() {
                                 </button>
                             ))}
                         </div>
+
+                        <button
+                            className="theme-toggle"
+                            onClick={toggleTheme}
+                            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+                        >
+                            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+                        </button>
                     </div>
                 </header>
 
@@ -337,27 +387,5 @@ const centeredStyle: React.CSSProperties = {
     justifyContent: "center",
     flex: 1,
     gap: 16,
-    color: "var(--text-muted)",
+    color: "var(--text-tertiary)",
 };
-
-function SidebarItem({
-    icon,
-    label,
-    active = false,
-    onClick,
-}: {
-    icon: string;
-    label: string;
-    active?: boolean;
-    onClick?: () => void;
-}) {
-    return (
-        <button
-            onClick={onClick}
-            className={`sidebar-item ${active ? "active" : ""}`}
-        >
-            <span className="sidebar-item-icon">{icon}</span>
-            <span className="sidebar-item-label">{label}</span>
-        </button>
-    );
-}
