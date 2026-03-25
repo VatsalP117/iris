@@ -19,7 +19,7 @@ const GitHubIcon = ({ className }: { className?: string }) => (
 );
 import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-
+// test comment to trigger deploy
 const Nav = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
@@ -45,23 +45,23 @@ const Nav = () => {
             <Link to="/docs" className="text-muted hover:text-foreground transition-colors">
               Docs
             </Link>
-            <a 
-              href="https://github.com/VatsalP117/iris" 
+            <a
+              href="https://github.com/VatsalP117/iris"
               className="text-muted hover:text-foreground transition-colors flex items-center gap-2"
             >
               <GitHubIcon className="w-4 h-4" />
               GitHub
             </a>
-            <Link 
-              to="/docs" 
+            <Link
+              to="/docs"
               className="px-4 py-2 rounded-lg bg-foreground text-background font-medium text-sm hover:bg-white/90 transition-colors"
             >
               Get Started
             </Link>
           </div>
 
-          <button 
-            onClick={() => setIsOpen(!isOpen)} 
+          <button
+            onClick={() => setIsOpen(!isOpen)}
             className="md:hidden p-2 text-muted hover:text-foreground"
           >
             {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -82,9 +82,9 @@ const Nav = () => {
           <a href="https://github.com/VatsalP117/iris" className="block text-muted py-2" onClick={() => setIsOpen(false)}>
             GitHub
           </a>
-          <Link 
-            to="/docs" 
-            className="block w-full px-4 py-2.5 rounded-lg bg-foreground text-background font-medium text-center" 
+          <Link
+            to="/docs"
+            className="block w-full px-4 py-2.5 rounded-lg bg-foreground text-background font-medium text-center"
             onClick={() => setIsOpen(false)}
           >
             Get Started
@@ -95,16 +95,16 @@ const Nav = () => {
   );
 };
 
-const FeatureCard = ({ 
-  icon: Icon, 
-  title, 
-  description, 
-  delay = 0 
-}: { 
-  icon: any; 
-  title: string; 
-  description: string; 
-  delay?: number 
+const FeatureCard = ({
+  icon: Icon,
+  title,
+  description,
+  delay = 0
+}: {
+  icon: any;
+  title: string;
+  description: string;
+  delay?: number
 }) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
@@ -149,15 +149,15 @@ export function Home() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link 
-              to="/docs" 
+            <Link
+              to="/docs"
               className="w-full sm:w-auto px-6 py-3 rounded-lg bg-foreground text-background font-medium text-sm hover:bg-white/90 transition-colors inline-flex items-center justify-center gap-2"
             >
-              Deploy in 5 minutes 
+              Deploy in 5 minutes
               <ArrowRight className="w-4 h-4" />
             </Link>
-            <a 
-              href="https://github.com/VatsalP117/iris" 
+            <a
+              href="https://github.com/VatsalP117/iris"
               className="w-full sm:w-auto px-6 py-3 rounded-lg border border-subtle text-sm font-medium hover:bg-foreground/5 transition-colors inline-flex items-center justify-center gap-2"
             >
               <GitHubIcon className="w-4 h-4" />
@@ -279,7 +279,7 @@ export function Home() {
               <div className="p-5 font-mono text-sm bg-bg-secondary">
                 <p className="text-muted">// Install</p>
                 <p className="mb-3"><span className="text-foreground">import</span> &#123; Iris &#125; <span className="text-foreground">from</span> <span className="text-muted">'iris-analytics'</span>;</p>
-                
+
                 <p className="text-muted">// Initialize</p>
                 <p className="text-foreground">const <span className="text-foreground">iris</span> = new <span className="text-foreground">Iris</span>(&#123;</p>
                 <p className="pl-4">host: <span className="text-muted">'https://your-iris.com'</span>,</p>
@@ -303,14 +303,14 @@ export function Home() {
             Join developers who have switched to a more private, faster analytics tool.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link 
-              to="/docs" 
+            <Link
+              to="/docs"
               className="px-6 py-3 rounded-lg bg-foreground text-background font-medium text-sm hover:bg-white/90 transition-colors"
             >
               Get Started
             </Link>
-            <Link 
-              to="/docs" 
+            <Link
+              to="/docs"
               className="px-6 py-3 rounded-lg border border-subtle text-sm font-medium hover:bg-foreground/5 transition-colors"
             >
               Read the Docs
