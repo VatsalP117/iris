@@ -28,6 +28,25 @@ The server will automatically:
 
 **View Dashboard:** Open `http://localhost:8081/`
 
+### Dokploy Monorepo Split (Recommended)
+
+To prevent marketing or SDK commits from rebuilding/redeploying the backend app, deploy this repo as two separate Dokploy apps:
+
+1. **Backend + Dashboard app**
+   - Build context: repository root
+   - Dockerfile: `/Dockerfile`
+   - Port: `8080`
+   - Watch paths: `cmd/**,pkg/**,dashboard/**,go.mod,go.sum,Dockerfile,.dockerignore,pnpm-lock.yaml,package.json,docker/pnpm-workspace.dashboard.yaml`
+2. **Marketing app**
+   - Build context: `/marketing`
+   - Dockerfile: `/marketing/Dockerfile` (or just `Dockerfile` when context is `/marketing`)
+   - Port: `80`
+   - Watch paths: `marketing/**`
+
+The backend image is now isolated from monorepo-only changes via:
+- root `.dockerignore` (excludes `marketing/` and `web/`)
+- Dockerfile copy steps that include only backend/dashboard sources
+
 ---
 
 ## 2. Using the Client SDK (Your Website)
