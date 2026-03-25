@@ -19,6 +19,11 @@ tasks:
     cmds:
       - pnpm dev
 
+  dev:marketing:
+    dir: marketing
+    cmds:
+      - pnpm dev
+
   build:backend:
     cmds:
       - mkdir -p dist
@@ -32,6 +37,7 @@ tasks:
     cmds:
       - pnpm --filter iris-analytics build
       - pnpm --filter @iris/dashboard build
+      - pnpm --filter marketing build
 
   build:
     deps: [build:backend, build:js]
