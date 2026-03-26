@@ -242,6 +242,36 @@ func (r *SqliteRepository) GetUniqueVisitorsTimeSeries(ctx context.Context, site
 	return results, rows.Err()
 }
 
+func (r *SqliteRepository) GetSessionsTimeSeries(ctx context.Context, siteKey, from, to string) ([]core.TimeSeriesBucket, error) {
+	query := `
+	SELECT
+		strftime('%Y-%m-%d', timestamp) AS day,
+		COUNT(DISTINCT session_id)       AS sessions
+	FROM events
+	WHERE event_name = '$pageview'
+	  AND ` + siteMatchClause + `
+	  AND ` + fromTimeClause + `
+	  AND ` + toTimeClause + `
+	GROUP BY day
+	ORDER BY day ASC
+	`
+	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []core.TimeSeriesBucket
+	for rows.Next() {
+		var b core.TimeSeriesBucket
+		if err := rows.Scan(&b.Date, &b.Sessions); err != nil {
+			return nil, err
+		}
+		results = append(results, b)
+	}
+	return results, rows.Err()
+}
+
 func (r *SqliteRepository) GetDevices(ctx context.Context, siteKey, from, to string) ([]core.DeviceStat, error) {
 	query := `
 	SELECT

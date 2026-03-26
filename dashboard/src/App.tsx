@@ -76,37 +76,6 @@ function getRangeLabel(preset: PresetKey): string {
 }
 
 export default function App() {
-    const [theme, setTheme] = useState<"dark" | "light">(() => {
-        const saved = localStorage.getItem("iris-theme");
-        return (saved as "dark" | "light") || "dark";
-    });
-
-    useEffect(() => {
-        document.documentElement.setAttribute("data-theme", theme);
-        localStorage.setItem("iris-theme", theme);
-    }, [theme]);
-
-    const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
-
-    const SunIcon = () => (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="5"/>
-            <line x1="12" y1="1" x2="12" y2="3"/>
-            <line x1="12" y1="21" x2="12" y2="23"/>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
-            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-            <line x1="1" y1="12" x2="3" y2="12"/>
-            <line x1="21" y1="12" x2="23" y2="12"/>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-        </svg>
-    );
-
-    const MoonIcon = () => (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-        </svg>
-    );
     const [sites, setSites] = useState<SiteStat[]>([]);
     const [sitesLoading, setSitesLoading] = useState(true);
     const [selectedSite, setSelectedSite] = useState<SiteStat | null>(null);
@@ -122,7 +91,12 @@ export default function App() {
     const [devices, setDevices] = useState<DeviceStat[]>([]);
     const [chartData, setChartData] = useState<DayBucket[]>([]);
     const [visitorsData, setVisitorsData] = useState<DayBucket[]>([]);
+    const [sessionsData, setSessionsData] = useState<DayBucket[]>([]);
     const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        document.documentElement.setAttribute("data-theme", "dark");
+    }, []);
 
     useEffect(() => {
         setSitesLoading(true);
@@ -139,7 +113,7 @@ export default function App() {
         if (!siteId) return;
         setLoading(true);
         try {
-            const [s, p, r, v, dev, ts, uv] = await Promise.all([
+            const [s, p, r, v, dev, ts, uv, sess] = await Promise.all([
                 api.stats(siteId, range.queryFrom, range.queryTo),
                 api.pages(siteId, range.queryFrom, range.queryTo),
                 api.referrers(siteId, range.queryFrom, range.queryTo),
@@ -147,6 +121,7 @@ export default function App() {
                 api.devices(siteId, range.queryFrom, range.queryTo),
                 api.timeseries(siteId, range.queryFrom, range.queryTo),
                 api.uniqueVisitorsTimeseries(siteId, range.queryFrom, range.queryTo),
+                api.sessionsTimeseries(siteId, range.queryFrom, range.queryTo),
             ]);
             setStats(s);
             setPages(p ?? []);
@@ -155,6 +130,7 @@ export default function App() {
             setDevices(dev ?? []);
             setChartData(ts ?? []);
             setVisitorsData(uv ?? []);
+            setSessionsData(sess ?? []);
         } catch (err) {
             console.error("Iris: fetch error", err);
         } finally {
@@ -181,6 +157,7 @@ export default function App() {
         setVitals([]);
         setDevices([]);
         setChartData([]);
+        setSessionsData([]);
     }
 
     function handleRefresh() {
@@ -285,13 +262,6 @@ export default function App() {
                             ))}
                         </div>
 
-                        <button
-                            className="theme-toggle"
-                            onClick={toggleTheme}
-                            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-                        >
-                            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-                        </button>
                     </div>
                 </header>
 
@@ -328,6 +298,7 @@ export default function App() {
                                     <PageviewsChart
                                         pageviewsData={chartData.length ? chartData : emptyBuckets}
                                         visitorsData={visitorsData.length ? visitorsData : emptyBuckets}
+                                        sessionsData={sessionsData.length ? sessionsData : emptyBuckets}
                                         loading={loading}
                                         from={windowRange.from}
                                         to={windowRange.to}

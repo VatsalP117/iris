@@ -33,6 +33,7 @@ func main() {
 	http.HandleFunc("/api/devices", api.NewCORSMiddleware(handler.GetDevices))
 	http.HandleFunc("/api/timeseries", api.NewCORSMiddleware(handler.GetTimeSeries))
 	http.HandleFunc("/api/timeseries/visitors", api.NewCORSMiddleware(handler.GetUniqueVisitorsTimeSeries))
+	http.HandleFunc("/api/timeseries/sessions", api.NewCORSMiddleware(handler.GetSessionsTimeSeries))
 	http.HandleFunc("/api/sites", api.NewCORSMiddleware(handler.ListSites))
 
 	dashboardDir := getEnv("DASHBOARD_DIR", "./dashboard/dist")
