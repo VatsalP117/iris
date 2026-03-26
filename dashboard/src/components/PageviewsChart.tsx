@@ -29,9 +29,9 @@ interface Props {
 export type MetricKey = "uniqueVisitors" | "pageviews" | "sessions";
 
 const METRICS: { key: MetricKey; label: string; color: string; gradient: string }[] = [
-    { key: "uniqueVisitors", label: "Unique visitors", color: "#0070f3", gradient: "url(#gradientUnique)" },
-    { key: "pageviews", label: "Pageviews", color: "#0088ff", gradient: "url(#gradientPageviews)" },
-    { key: "sessions", label: "Sessions", color: "#0099ff", gradient: "url(#gradientSessions)" },
+    { key: "uniqueVisitors", label: "Unique visitors", color: "#f59e0b", gradient: "url(#gradientUnique)" },
+    { key: "pageviews", label: "Pageviews", color: "#fbbf24", gradient: "url(#gradientPageviews)" },
+    { key: "sessions", label: "Sessions", color: "#60a5fa", gradient: "url(#gradientSessions)" },
 ];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -42,12 +42,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                 background: "var(--bg-secondary)",
                 border: "1px solid var(--border)",
                 borderRadius: "var(--radius-md)",
-                padding: "10px 14px",
+                padding: "12px 16px",
                 fontSize: 13,
-                minWidth: 160,
+                minWidth: 170,
+                boxShadow: "var(--shadow-lg)",
             }}
         >
-            <div style={{ color: "var(--text-tertiary)", marginBottom: 8 }}>
+            <div style={{ color: "var(--text-tertiary)", marginBottom: 10, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 {format(parseISO(label), "MMM d, yyyy")}
             </div>
             {payload.map((entry: any, index: number) => {
@@ -59,11 +60,11 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                             display: "flex",
                             justifyContent: "space-between",
                             alignItems: "center",
-                            gap: 16,
-                            marginTop: 4,
+                            gap: 20,
+                            marginTop: 6,
                         }}
                     >
-                        <span style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 8 }}>
                             <span
                                 style={{
                                     width: 8,
@@ -71,11 +72,12 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                                     borderRadius: "50%",
                                     background: entry.color,
                                     display: "inline-block",
+                                    boxShadow: `0 0 8px ${entry.color}`,
                                 }}
                             />
                             {metric?.label ?? entry.dataKey}
                         </span>
-                        <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>
+                        <span style={{ color: "var(--text-primary)", fontWeight: 700, fontFamily: "var(--font-display)" }}>
                             {entry.value.toLocaleString()}
                         </span>
                     </div>
@@ -128,7 +130,7 @@ export function PageviewsChart({ pageviewsData, visitorsData, sessionsData, load
         .join(", ");
 
     return (
-        <div className="card full-width">
+        <div className="card">
             <div className="card-header">
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     <span className="card-title">Traffic Overview</span>
@@ -151,7 +153,7 @@ export function PageviewsChart({ pageviewsData, visitorsData, sessionsData, load
                                         />
                                         <span
                                             className="metric-color-dot"
-                                            style={{ background: metric.color }}
+                                            style={{ background: metric.color, boxShadow: `0 0 6px ${metric.color}` }}
                                         />
                                         <span className="metric-label">{metric.label}</span>
                                     </label>
@@ -162,27 +164,27 @@ export function PageviewsChart({ pageviewsData, visitorsData, sessionsData, load
                 </div>
                 <span className="card-meta">{windowLabel}</span>
             </div>
-            <div className="card-body" style={{ height: 280 }}>
+            <div className="card-body" style={{ height: 300 }}>
                 {loading ? (
                     <div className="state-center" style={{ height: "100%" }}>
                         <div className="spinner" />
-                        Loading…
+                        <span style={{ marginTop: 8, color: "var(--text-tertiary)" }}>Loading…</span>
                     </div>
                 ) : (
                     <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                        <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="gradientUnique" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#0070f3" stopOpacity={0.25} />
-                                    <stop offset="100%" stopColor="#0070f3" stopOpacity={0} />
+                                    <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.3} />
+                                    <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
                                 </linearGradient>
                                 <linearGradient id="gradientPageviews" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#0088ff" stopOpacity={0.2} />
-                                    <stop offset="100%" stopColor="#0088ff" stopOpacity={0} />
+                                    <stop offset="0%" stopColor="#fbbf24" stopOpacity={0.25} />
+                                    <stop offset="100%" stopColor="#fbbf24" stopOpacity={0} />
                                 </linearGradient>
                                 <linearGradient id="gradientSessions" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#0099ff" stopOpacity={0.15} />
-                                    <stop offset="100%" stopColor="#0099ff" stopOpacity={0} />
+                                    <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.2} />
+                                    <stop offset="100%" stopColor="#60a5fa" stopOpacity={0} />
                                 </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-light)" />
@@ -206,10 +208,10 @@ export function PageviewsChart({ pageviewsData, visitorsData, sessionsData, load
                                     type="monotone"
                                     dataKey={metric.key}
                                     stroke={metric.color}
-                                    strokeWidth={2}
+                                    strokeWidth={2.5}
                                     fill={metric.gradient}
                                     dot={false}
-                                    activeDot={{ r: 5, fill: metric.color, strokeWidth: 0 }}
+                                    activeDot={{ r: 6, fill: metric.color, strokeWidth: 0, style: { filter: `drop-shadow(0 0 8px ${metric.color})` } }}
                                 />
                             ))}
                         </AreaChart>

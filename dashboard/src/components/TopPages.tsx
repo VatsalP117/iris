@@ -20,7 +20,6 @@ export function TopPages({ pages, loading }: Props) {
                 {loading ? (
                     <div className="state-center">
                         <div className="spinner" />
-                        Loading…
                     </div>
                 ) : pages.length === 0 ? (
                     <div className="state-center">No data yet</div>
@@ -34,8 +33,8 @@ export function TopPages({ pages, loading }: Props) {
                             </tr>
                         </thead>
                         <tbody>
-                            {pages.map((p) => (
-                                <tr key={p.url}>
+                            {pages.map((p, i) => (
+                                <tr key={p.url} style={{ animationDelay: `${i * 50}ms` }}>
                                     <td className="col-url" title={p.url}>
                                         {p.url.replace(/^https?:\/\/[^/]+/, "") || "/"}
                                     </td>

@@ -29,7 +29,6 @@ export function TopReferrers({ referrers, loading }: Props) {
                 {loading ? (
                     <div className="state-center">
                         <div className="spinner" />
-                        Loading…
                     </div>
                 ) : referrers.length === 0 ? (
                     <div className="state-center">No referrer data</div>
@@ -43,8 +42,8 @@ export function TopReferrers({ referrers, loading }: Props) {
                             </tr>
                         </thead>
                         <tbody>
-                            {referrers.map((r) => (
-                                <tr key={r.referrer}>
+                            {referrers.map((r, i) => (
+                                <tr key={r.referrer} style={{ animationDelay: `${i * 50}ms` }}>
                                     <td className="col-url">{cleanReferrer(r.referrer)}</td>
                                     <td className="col-num">{r.visitors.toLocaleString()}</td>
                                     <td className="col-bar">
@@ -53,7 +52,7 @@ export function TopReferrers({ referrers, loading }: Props) {
                                                 className="bar-fill"
                                                 style={{
                                                     width: `${(r.visitors / max) * 100}%`,
-                                                    background: "var(--green)",
+                                                    background: "linear-gradient(90deg, #60a5fa, #93c5fd)",
                                                 }}
                                             />
                                         </div>

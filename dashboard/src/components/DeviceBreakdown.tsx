@@ -6,9 +6,9 @@ interface Props {
 }
 
 const DEVICE_COLORS: Record<string, string> = {
-    Desktop: "#0070f3",
-    Tablet: "#0088ff",
-    Mobile: "#0099ff",
+    Desktop: "#f59e0b",
+    Tablet: "#fbbf24",
+    Mobile: "#60a5fa",
 };
 
 const DEVICE_LABELS: Record<string, string> = {
@@ -30,7 +30,6 @@ export function DeviceBreakdown({ devices, loading }: Props) {
                 {loading ? (
                     <div className="state-center" style={{ height: 120 }}>
                         <div className="spinner" />
-                        Loading…
                     </div>
                 ) : devices.length === 0 ? (
                     <div className="state-center" style={{ height: 120 }}>No data yet</div>
@@ -38,7 +37,7 @@ export function DeviceBreakdown({ devices, loading }: Props) {
                     <div className="device-list">
                         {devices.map((d) => {
                             const pct = Math.round((d.count / total) * 100);
-                            const color = DEVICE_COLORS[d.device] ?? "#0070f3";
+                            const color = DEVICE_COLORS[d.device] ?? "#f59e0b";
                             return (
                                 <div className="device-row" key={d.device}>
                                     <div className="device-row-header">
@@ -51,7 +50,7 @@ export function DeviceBreakdown({ devices, loading }: Props) {
                                     <div className="bar-bg">
                                         <div
                                             className="bar-fill"
-                                            style={{ width: `${pct}%`, background: color }}
+                                            style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${color}, ${color}88)` }}
                                         />
                                     </div>
                                 </div>

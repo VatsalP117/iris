@@ -5,11 +5,10 @@ interface Props {
     loading: boolean;
 }
 
-// Thresholds from web.dev/vitals
 const THRESHOLDS: Record<string, [number, number]> = {
-    LCP: [2500, 4000],   // ms
-    INP: [200, 500],     // ms
-    CLS: [0.1, 0.25],   // unitless
+    LCP: [2500, 4000],
+    INP: [200, 500],
+    CLS: [0.1, 0.25],
 };
 
 const UNITS: Record<string, string> = {
@@ -38,7 +37,6 @@ const RATING_LABELS: Record<string, string> = {
 };
 
 export function WebVitals({ vitals, loading }: Props) {
-    // Ensure CLS, INP, LCP are shown in a fixed order
     const ordered = ["LCP", "INP", "CLS"].map((name) => {
         const found = vitals.find((v) => v.name === name);
         return { name, value: found?.value ?? null };
@@ -56,7 +54,6 @@ export function WebVitals({ vitals, loading }: Props) {
                 {loading ? (
                     <div className="state-center">
                         <div className="spinner" />
-                        Loading…
                     </div>
                 ) : (
                     <div className="vitals-grid">

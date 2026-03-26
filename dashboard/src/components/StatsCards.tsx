@@ -10,19 +10,19 @@ const CARDS = [
         key: "pageviews" as const,
         label: "Pageviews",
         icon: "PV",
-        tone: "accent",
+        tone: "accent" as const,
     },
     {
         key: "unique_visitors" as const,
         label: "Unique Visitors",
         icon: "UV",
-        tone: "green",
+        tone: "green" as const,
     },
     {
         key: "sessions" as const,
         label: "Sessions",
         icon: "SE",
-        tone: "blue",
+        tone: "blue" as const,
     },
 ];
 
@@ -37,15 +37,17 @@ export function StatsCards({ stats, loading }: Props) {
         <div className="stats-grid">
             {CARDS.map((c) => (
                 <div className="stat-card" key={c.key}>
-                    <div className="stat-card-label">
-                        <div className={`stat-card-icon ${c.tone}`}>
-                            {c.icon}
+                    <div className="stat-card-header">
+                        <div className="stat-card-label">
+                            <div className={`stat-card-icon ${c.tone}`}>
+                                {c.icon}
+                            </div>
+                            {c.label}
                         </div>
-                        {c.label}
                     </div>
                     <div className="stat-card-value">
                         {loading ? (
-                            <span className="stat-card-pending">—</span>
+                            <span className="stat-card-pending" style={{ opacity: 0.3 }}>—</span>
                         ) : (
                             fmt(stats?.[c.key] ?? 0)
                         )}
