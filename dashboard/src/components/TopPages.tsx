@@ -12,9 +12,7 @@ export function TopPages({ pages, loading }: Props) {
         <div className="card">
             <div className="card-header">
                 <span className="card-title">Top Pages</span>
-                <span className="card-meta">
-                    {pages.length} pages
-                </span>
+                <span className="card-meta">{pages.length} pages</span>
             </div>
             <div className="card-body">
                 {loading ? (
@@ -33,8 +31,8 @@ export function TopPages({ pages, loading }: Props) {
                             </tr>
                         </thead>
                         <tbody>
-                            {pages.map((p, i) => (
-                                <tr key={p.url} style={{ animationDelay: `${i * 50}ms` }}>
+                            {pages.map((p) => (
+                                <tr key={p.url}>
                                     <td className="col-url" title={p.url}>
                                         {p.url.replace(/^https?:\/\/[^/]+/, "") || "/"}
                                     </td>

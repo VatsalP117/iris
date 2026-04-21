@@ -21,9 +21,7 @@ export function TopReferrers({ referrers, loading }: Props) {
         <div className="card">
             <div className="card-header">
                 <span className="card-title">Top Referrers</span>
-                <span className="card-meta">
-                    {referrers.length} sources
-                </span>
+                <span className="card-meta">{referrers.length} sources</span>
             </div>
             <div className="card-body">
                 {loading ? (
@@ -42,8 +40,8 @@ export function TopReferrers({ referrers, loading }: Props) {
                             </tr>
                         </thead>
                         <tbody>
-                            {referrers.map((r, i) => (
-                                <tr key={r.referrer} style={{ animationDelay: `${i * 50}ms` }}>
+                            {referrers.map((r) => (
+                                <tr key={r.referrer}>
                                     <td className="col-url">{cleanReferrer(r.referrer)}</td>
                                     <td className="col-num">{r.visitors.toLocaleString()}</td>
                                     <td className="col-bar">
@@ -52,7 +50,7 @@ export function TopReferrers({ referrers, loading }: Props) {
                                                 className="bar-fill"
                                                 style={{
                                                     width: `${(r.visitors / max) * 100}%`,
-                                                    background: "linear-gradient(90deg, #60a5fa, #93c5fd)",
+                                                    opacity: 0.6,
                                                 }}
                                             />
                                         </div>

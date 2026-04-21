@@ -46,9 +46,7 @@ export function WebVitals({ vitals, loading }: Props) {
         <div className="card">
             <div className="card-header">
                 <span className="card-title">Web Vitals</span>
-                <span className="card-meta">
-                    P75 across page loads
-                </span>
+                <span className="card-meta">P75</span>
             </div>
             <div className="card-body">
                 {loading ? (
@@ -64,7 +62,7 @@ export function WebVitals({ vitals, loading }: Props) {
                                 <div className="vital-item" key={name}>
                                     <div className="vital-name">{name}</div>
                                     <div className={`vital-value ${rating}`}>
-                                        {value !== null ? `${fmtValue(name, value)}${unit}` : "—"}
+                                        {value !== null ? `${fmtValue(name, value)}${unit}` : "\u2014"}
                                     </div>
                                     {value !== null && (
                                         <div className={`vital-badge ${rating}`}>

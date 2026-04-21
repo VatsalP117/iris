@@ -5,12 +5,6 @@ interface Props {
     loading: boolean;
 }
 
-const DEVICE_COLORS: Record<string, string> = {
-    Desktop: "#f59e0b",
-    Tablet: "#fbbf24",
-    Mobile: "#60a5fa",
-};
-
 const DEVICE_LABELS: Record<string, string> = {
     Desktop: "Desktop",
     Tablet: "Tablet",
@@ -37,20 +31,21 @@ export function DeviceBreakdown({ devices, loading }: Props) {
                     <div className="device-list">
                         {devices.map((d) => {
                             const pct = Math.round((d.count / total) * 100);
-                            const color = DEVICE_COLORS[d.device] ?? "#f59e0b";
                             return (
                                 <div className="device-row" key={d.device}>
                                     <div className="device-row-header">
                                         <span className="device-name">{DEVICE_LABELS[d.device] ?? d.device}</span>
                                         <span className="device-stats">
-                                            <span className="device-pct" style={{ color }}>{pct}%</span>
-                                            <span className="device-count">({d.count.toLocaleString()})</span>
+                                            <span className="device-pct" style={{ color: "var(--text-primary)" }}>
+                                                {pct}%
+                                            </span>
+                                            <span className="device-count">{d.count.toLocaleString()}</span>
                                         </span>
                                     </div>
                                     <div className="bar-bg">
                                         <div
                                             className="bar-fill"
-                                            style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${color}, ${color}88)` }}
+                                            style={{ width: `${pct}%`, opacity: 0.5 }}
                                         />
                                     </div>
                                 </div>

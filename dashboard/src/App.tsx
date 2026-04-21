@@ -8,7 +8,6 @@ import { WebVitals } from "./components/WebVitals";
 import { DeviceBreakdown } from "./components/DeviceBreakdown";
 import { PageviewsChart, buildEmptyBuckets, DayBucket } from "./components/PageviewsChart";
 
-type Tab = "overview" | "pages" | "referrers" | "vitals" | "devices";
 type PresetKey = "24h" | "7d" | "30d" | "90d";
 
 type DatePreset = {
@@ -65,14 +64,9 @@ function buildWindow(preset: PresetKey): DateWindow {
 
 function formatWindow(window: DateWindow, preset: PresetKey): string {
     if (preset === "24h") {
-        return `${format(window.from, "MMM d, p")} - ${format(window.to, "MMM d, p")}`;
+        return `${format(window.from, "MMM d, p")} \u2014 ${format(window.to, "MMM d, p")}`;
     }
-    return `${format(window.from, "MMM d")} - ${format(window.to, "MMM d, yyyy")}`;
-}
-
-function getRangeLabel(preset: PresetKey): string {
-    if (preset === "24h") return "Last 24 hours";
-    return `Last ${preset.replace("d", " days")}`;
+    return `${format(window.from, "MMM d")} \u2014 ${format(window.to, "MMM d, yyyy")}`;
 }
 
 export default function App() {
@@ -80,7 +74,6 @@ export default function App() {
     const [sitesLoading, setSitesLoading] = useState(true);
     const [selectedSite, setSelectedSite] = useState<SiteStat | null>(null);
 
-    const [activeTab, setActiveTab] = useState<Tab>("overview");
     const [preset, setPreset] = useState<PresetKey>("30d");
     const [windowRange, setWindowRange] = useState<DateWindow>(() => buildWindow("30d"));
 
@@ -93,10 +86,6 @@ export default function App() {
     const [visitorsData, setVisitorsData] = useState<DayBucket[]>([]);
     const [sessionsData, setSessionsData] = useState<DayBucket[]>([]);
     const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-        document.documentElement.setAttribute("data-theme", "dark");
-    }, []);
 
     useEffect(() => {
         setSitesLoading(true);
@@ -150,7 +139,6 @@ export default function App() {
     function handleSiteChange(e: React.ChangeEvent<HTMLSelectElement>) {
         const site = sites.find((s) => s.site_id === e.target.value) ?? null;
         setSelectedSite(site);
-
         setStats(null);
         setPages([]);
         setReferrers([]);
@@ -170,64 +158,34 @@ export default function App() {
 
     return (
         <div className="app-layout">
-            <aside className="sidebar">
-                <div className="sidebar-logo">
-                    <div className="sidebar-logo-icon">IR</div>
-                    <span className="sidebar-logo-text">Iris</span>
-                </div>
+            {/* Top Navigation */}
+            <header className="topbar">
+                <div className="topbar-inner">
+                    <div className="topbar-brand">
+                        <div className="brand-mark">Ir</div>
+                        <span className="brand-name">Iris</span>
+                    </div>
 
-                <span className="sidebar-section-label">Menu</span>
-
-                <nav className="sidebar-nav" aria-label="Dashboard tabs">
-                    <button className={`sidebar-item ${activeTab === "overview" ? "active" : ""}`} onClick={() => setActiveTab("overview")}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                        <span className="sidebar-item-label">Overview</span>
-                    </button>
-                    <button className={`sidebar-item ${activeTab === "pages" ? "active" : ""}`} onClick={() => setActiveTab("pages")}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        <span className="sidebar-item-label">Pages</span>
-                    </button>
-                    <button className={`sidebar-item ${activeTab === "referrers" ? "active" : ""}`} onClick={() => setActiveTab("referrers")}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                        <span className="sidebar-item-label">Referrers</span>
-                    </button>
-                    <button className={`sidebar-item ${activeTab === "vitals" ? "active" : ""}`} onClick={() => setActiveTab("vitals")}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                        <span className="sidebar-item-label">Web Vitals</span>
-                    </button>
-                    <button className={`sidebar-item ${activeTab === "devices" ? "active" : ""}`} onClick={() => setActiveTab("devices")}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                        <span className="sidebar-item-label">Devices</span>
-                    </button>
-                </nav>
-
-                <div className="sidebar-footnote">
-                    <span className="sidebar-footnote-label">Version</span>
-                    <span className="sidebar-footnote-value">v0.1.0</span>
-                </div>
-            </aside>
-
-            <div className="main-area">
-                <header className="topbar">
-                    <div className="topbar-left">
-                        {siteId ? (
-                            <div className="topbar-site-stack">
-                                <span className="domain-badge">{siteId}</span>
-                            </div>
-                        ) : (
-                            <span className="topbar-title-muted">
-                                {sitesLoading ? "Loading sites…" : "No sites found"}
-                            </span>
-                        )}
+                    <div className="topbar-center">
+                        <div className="date-preset-group">
+                            {DATE_PRESETS.map((p) => (
+                                <button
+                                    key={p.key}
+                                    className={`date-preset-btn ${preset === p.key ? "active" : ""}`}
+                                    onClick={() => handlePreset(p.key)}
+                                >
+                                    {p.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     <div className="topbar-right">
                         {!sitesLoading && sites.length > 0 && (
                             <select
-                                className="input"
+                                className="select-control"
                                 value={selectedSite?.site_id ?? ""}
                                 onChange={handleSiteChange}
-                                id="site-picker"
                             >
                                 {sites.map((s) => (
                                     <option key={s.site_id} value={s.site_id}>
@@ -239,49 +197,37 @@ export default function App() {
 
                         {selectedSite && (
                             <button
-                                className={`btn btn-ghost btn-refresh ${loading ? "is-loading" : ""}`}
-                                id="refresh-btn"
+                                className={`icon-btn ${loading ? "is-loading" : ""}`}
                                 onClick={handleRefresh}
                                 disabled={loading}
                                 title="Refresh data"
                             >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <polyline points="23 4 23 10 17 10"/>
                                     <polyline points="1 20 1 14 7 14"/>
                                     <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
                                 </svg>
                             </button>
                         )}
-
-                        <div className="date-range-group" role="group" aria-label="Date ranges">
-                            {DATE_PRESETS.map((p) => (
-                                <button
-                                    key={p.key}
-                                    className={`btn btn-ghost ${preset === p.key ? "active" : ""}`}
-                                    onClick={() => handlePreset(p.key)}
-                                    id={`preset-${p.key}`}
-                                >
-                                    {p.label}
-                                </button>
-                            ))}
-                        </div>
-
                     </div>
-                </header>
+                </div>
+            </header>
 
-                <main className="page-content">
+            {/* Main Content */}
+            <main className="main-area">
+                <div className="content-wrapper">
                     {sitesLoading && (
-                        <div style={centeredStyle}>
-                            <div className="status-glyph">IR</div>
-                            <div className="status-title">Loading sites…</div>
+                        <div className="empty-state">
+                            <div className="empty-state-icon">Ir</div>
+                            <div className="empty-state-title">Loading sites&hellip;</div>
                         </div>
                     )}
 
                     {!sitesLoading && sites.length === 0 && (
-                        <div style={centeredStyle}>
-                            <div className="status-glyph">00</div>
-                            <div className="status-title">No data yet</div>
-                            <div className="status-subtitle">
+                        <div className="empty-state">
+                            <div className="empty-state-icon">00</div>
+                            <div className="empty-state-title">No data yet</div>
+                            <div className="empty-state-subtitle">
                                 Install the Iris SDK on your site to start collecting analytics.
                             </div>
                         </div>
@@ -289,68 +235,51 @@ export default function App() {
 
                     {!sitesLoading && selectedSite && (
                         <>
-                            <section className="overview-hero">
-                                <span className="overview-eyebrow">Traffic snapshot</span>
-                                <h1 className="overview-title">{getRangeLabel(preset)}</h1>
-                                <p className="overview-subtitle">{formatWindow(windowRange, preset)}</p>
-                            </section>
+                            {/* Header Section */}
+                            <div className="section-header animate-in">
+                                <div className="section-label">Analytics</div>
+                                <h1 className="section-title">{siteId}</h1>
+                                <p className="section-subtitle">{formatWindow(windowRange, preset)}</p>
+                            </div>
 
+                            {/* Stats */}
                             <StatsCards stats={stats} loading={loading} />
 
-                            {activeTab === "overview" && (
-                                <div className="dashboard-grid">
-                                    <PageviewsChart
-                                        pageviewsData={chartData.length ? chartData : emptyBuckets}
-                                        visitorsData={visitorsData.length ? visitorsData : emptyBuckets}
-                                        sessionsData={sessionsData.length ? sessionsData : emptyBuckets}
-                                        loading={loading}
-                                        from={windowRange.from}
-                                        to={windowRange.to}
-                                    />
-                                    <TopPages pages={pages} loading={loading} />
-                                    <TopReferrers referrers={referrers} loading={loading} />
-                                    <WebVitals vitals={vitals} loading={loading} />
-                                    <DeviceBreakdown devices={devices} loading={loading} />
-                                </div>
-                            )}
+                            {/* Chart */}
+                            <div className="animate-in animate-in-delay-1" style={{ marginBottom: "var(--space-8)" }}>
+                                <PageviewsChart
+                                    pageviewsData={chartData.length ? chartData : emptyBuckets}
+                                    visitorsData={visitorsData.length ? visitorsData : emptyBuckets}
+                                    sessionsData={sessionsData.length ? sessionsData : emptyBuckets}
+                                    loading={loading}
+                                    from={windowRange.from}
+                                    to={windowRange.to}
+                                />
+                            </div>
 
-                            {activeTab === "pages" && (
-                                <div className="single-column-panel">
-                                    <TopPages pages={pages} loading={loading} />
+                            {/* Bottom Grid */}
+                            <div className="dashboard-grid">
+                                <div className="dashboard-sidebar">
+                                    <div className="animate-in animate-in-delay-2">
+                                        <TopPages pages={pages} loading={loading} />
+                                    </div>
+                                    <div className="animate-in animate-in-delay-3">
+                                        <TopReferrers referrers={referrers} loading={loading} />
+                                    </div>
                                 </div>
-                            )}
-
-                            {activeTab === "referrers" && (
-                                <div className="single-column-panel">
-                                    <TopReferrers referrers={referrers} loading={loading} />
+                                <div className="dashboard-sidebar">
+                                    <div className="animate-in animate-in-delay-4">
+                                        <WebVitals vitals={vitals} loading={loading} />
+                                    </div>
+                                    <div className="animate-in animate-in-delay-5">
+                                        <DeviceBreakdown devices={devices} loading={loading} />
+                                    </div>
                                 </div>
-                            )}
-
-                            {activeTab === "vitals" && (
-                                <div className="single-column-panel">
-                                    <WebVitals vitals={vitals} loading={loading} />
-                                </div>
-                            )}
-
-                            {activeTab === "devices" && (
-                                <div className="single-column-panel">
-                                    <DeviceBreakdown devices={devices} loading={loading} />
-                                </div>
-                            )}
+                            </div>
                         </>
                     )}
-                </main>
-            </div>
+                </div>
+            </main>
         </div>
     );
 }
-
-const centeredStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    flex: 1,
-    gap: 16,
-    color: "var(--text-tertiary)",
-};
