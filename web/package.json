@@ -1,6 +1,6 @@
 {
   "name": "iris-analytics",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Privacy-first, self-hosted web analytics SDK with daily rotating visitor IDs",
   "license": "MIT",
   "repository": {
