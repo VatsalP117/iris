@@ -55,7 +55,7 @@ func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {
 	event.Timestamp = time.Now().UTC()
 
 	if event.Properties != nil {
-		truncateStrings(event.Properties, 200)
+		event.Properties = truncateStrings(event.Properties, 200).(map[string]any)
 	}
 
 	if err := h.Repo.Insert(r.Context(), &event); err != nil {
@@ -94,7 +94,7 @@ func (h *Handler) TrackBatchEvents(w http.ResponseWriter, r *http.Request) {
 		events[i].ID = uuid.NewString()
 		events[i].Timestamp = now
 		if events[i].Properties != nil {
-			truncateStrings(events[i].Properties, 200)
+			events[i].Properties = truncateStrings(events[i].Properties, 200).(map[string]any)
 		}
 		ptrs[i] = &events[i]
 	}
@@ -222,23 +222,26 @@ func (h *Handler) ListSites(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-func truncateStrings(data any, maxLen int) {
+func truncateStrings(data any, maxLen int) any {
 	switch v := data.(type) {
+	case string:
+		if len(v) > maxLen {
+			return v[:maxLen] + "..."
+		}
+		return v
 	case map[string]any:
+		out := make(map[string]any, len(v))
 		for key, val := range v {
-			if str, ok := val.(string); ok && len(str) > maxLen {
-				v[key] = str[:maxLen] + "..."
-			} else {
-				truncateStrings(val, maxLen)
-			}
+			out[key] = truncateStrings(val, maxLen)
 		}
+		return out
 	case []any:
+		out := make([]any, len(v))
 		for i, val := range v {
-			if str, ok := val.(string); ok && len(str) > maxLen {
-				v[i] = str[:maxLen] + "..."
-			} else {
-				truncateStrings(val, maxLen)
-			}
+			out[i] = truncateStrings(val, maxLen)
 		}
+		return out
+	default:
+		return data
 	}
 }
