@@ -12,6 +12,7 @@ export class Iris {
   private config: IrisConfig;
   private isStarted = false;
   private originalPushState: typeof history.pushState | null = null;
+  private autocaptureCleanup: (() => void) | null = null;
 
   constructor(config: IrisConfig) {
     this.config = {
@@ -33,7 +34,7 @@ export class Iris {
       this.enableHistoryPatch();
     }
     if (ac && ac.clicks === true) {
-      initAutoCapture(this.track.bind(this));
+      this.autocaptureCleanup = initAutoCapture(this.track.bind(this));
     }
     if (ac && ac.webvitals === true) {
       initVitals(this.track.bind(this));
@@ -80,6 +81,11 @@ export class Iris {
     this.isStarted = false;
 
     this.transport.destroy();
+
+    if (this.autocaptureCleanup) {
+      this.autocaptureCleanup();
+      this.autocaptureCleanup = null;
+    }
 
     if (this.originalPushState) {
       history.pushState = this.originalPushState;
