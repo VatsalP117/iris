@@ -8,6 +8,7 @@ import { WebVitals } from "./components/WebVitals";
 import { DeviceBreakdown } from "./components/DeviceBreakdown";
 import { PageviewsChart, buildEmptyBuckets, DayBucket } from "./components/PageviewsChart";
 
+type Tab = "overview" | "pages" | "referrers" | "vitals" | "devices";
 type PresetKey = "24h" | "7d" | "30d" | "90d";
 
 type DatePreset = {
@@ -29,6 +30,14 @@ const DATE_PRESETS: DatePreset[] = [
     { key: "7d", label: "7d", unit: "days", amount: 7 },
     { key: "30d", label: "30d", unit: "days", amount: 30 },
     { key: "90d", label: "90d", unit: "days", amount: 90 },
+];
+
+const TABS: { key: Tab; label: string }[] = [
+    { key: "overview", label: "Overview" },
+    { key: "pages", label: "Pages" },
+    { key: "referrers", label: "Referrers" },
+    { key: "vitals", label: "Web Vitals" },
+    { key: "devices", label: "Devices" },
 ];
 
 function fmtDate(d: Date): string {
@@ -73,6 +82,7 @@ export default function App() {
     const [sites, setSites] = useState<SiteStat[]>([]);
     const [sitesLoading, setSitesLoading] = useState(true);
     const [selectedSite, setSelectedSite] = useState<SiteStat | null>(null);
+    const [activeTab, setActiveTab] = useState<Tab>("overview");
 
     const [preset, setPreset] = useState<PresetKey>("30d");
     const [windowRange, setWindowRange] = useState<DateWindow>(() => buildWindow("30d"));
@@ -245,37 +255,80 @@ export default function App() {
                             {/* Stats */}
                             <StatsCards stats={stats} loading={loading} />
 
-                            {/* Chart */}
-                            <div className="animate-in animate-in-delay-1" style={{ marginBottom: "var(--space-8)" }}>
-                                <PageviewsChart
-                                    pageviewsData={chartData.length ? chartData : emptyBuckets}
-                                    visitorsData={visitorsData.length ? visitorsData : emptyBuckets}
-                                    sessionsData={sessionsData.length ? sessionsData : emptyBuckets}
-                                    loading={loading}
-                                    from={windowRange.from}
-                                    to={windowRange.to}
-                                />
+                            {/* Tabs */}
+                            <div className="tab-bar animate-in animate-in-delay-1">
+                                {TABS.map((t) => (
+                                    <button
+                                        key={t.key}
+                                        className={`tab-btn ${activeTab === t.key ? "active" : ""}`}
+                                        onClick={() => setActiveTab(t.key)}
+                                    >
+                                        {t.label}
+                                    </button>
+                                ))}
                             </div>
 
-                            {/* Bottom Grid */}
-                            <div className="dashboard-grid">
-                                <div className="dashboard-sidebar">
-                                    <div className="animate-in animate-in-delay-2">
-                                        <TopPages pages={pages} loading={loading} />
+                            {/* Overview */}
+                            {activeTab === "overview" && (
+                                <>
+                                    <div className="animate-in animate-in-delay-1" style={{ marginBottom: "var(--space-8)" }}>
+                                        <PageviewsChart
+                                            pageviewsData={chartData.length ? chartData : emptyBuckets}
+                                            visitorsData={visitorsData.length ? visitorsData : emptyBuckets}
+                                            sessionsData={sessionsData.length ? sessionsData : emptyBuckets}
+                                            loading={loading}
+                                            from={windowRange.from}
+                                            to={windowRange.to}
+                                        />
                                     </div>
-                                    <div className="animate-in animate-in-delay-3">
-                                        <TopReferrers referrers={referrers} loading={loading} />
+                                    <div className="dashboard-grid">
+                                        <div className="dashboard-sidebar">
+                                            <div className="animate-in animate-in-delay-2">
+                                                <TopPages pages={pages} loading={loading} />
+                                            </div>
+                                            <div className="animate-in animate-in-delay-3">
+                                                <TopReferrers referrers={referrers} loading={loading} />
+                                            </div>
+                                        </div>
+                                        <div className="dashboard-sidebar">
+                                            <div className="animate-in animate-in-delay-4">
+                                                <WebVitals vitals={vitals} loading={loading} />
+                                            </div>
+                                            <div className="animate-in animate-in-delay-5">
+                                                <DeviceBreakdown devices={devices} loading={loading} />
+                                            </div>
+                                        </div>
                                     </div>
+                                </>
+                            )}
+
+                            {/* Pages */}
+                            {activeTab === "pages" && (
+                                <div className="animate-in animate-in-delay-1">
+                                    <TopPages pages={pages} loading={loading} />
                                 </div>
-                                <div className="dashboard-sidebar">
-                                    <div className="animate-in animate-in-delay-4">
-                                        <WebVitals vitals={vitals} loading={loading} />
-                                    </div>
-                                    <div className="animate-in animate-in-delay-5">
-                                        <DeviceBreakdown devices={devices} loading={loading} />
-                                    </div>
+                            )}
+
+                            {/* Referrers */}
+                            {activeTab === "referrers" && (
+                                <div className="animate-in animate-in-delay-1">
+                                    <TopReferrers referrers={referrers} loading={loading} />
                                 </div>
-                            </div>
+                            )}
+
+                            {/* Vitals */}
+                            {activeTab === "vitals" && (
+                                <div className="animate-in animate-in-delay-1">
+                                    <WebVitals vitals={vitals} loading={loading} />
+                                </div>
+                            )}
+
+                            {/* Devices */}
+                            {activeTab === "devices" && (
+                                <div className="animate-in animate-in-delay-1">
+                                    <DeviceBreakdown devices={devices} loading={loading} />
+                                </div>
+                            )}
                         </>
                     )}
                 </div>
