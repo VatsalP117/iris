@@ -42,36 +42,36 @@ function buildParams(siteId: string, from: string, to: string) {
     return p.toString();
 }
 
-async function get<T>(path: string): Promise<T> {
-    const res = await fetch(BASE + path);
+async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+    const res = await fetch(BASE + path, { signal });
     if (!res.ok) throw new Error(`${path} → ${res.status}`);
     return res.json();
 }
 
 export const api = {
-    stats: (siteId: string, from: string, to: string) =>
-        get<StatsResult>(`/api/stats?${buildParams(siteId, from, to)}`),
+    stats: (siteId: string, from: string, to: string, signal?: AbortSignal) =>
+        get<StatsResult>(`/api/stats?${buildParams(siteId, from, to)}`, signal),
 
-    pages: (siteId: string, from: string, to: string) =>
-        get<PageStat[]>(`/api/pages?${buildParams(siteId, from, to)}`),
+    pages: (siteId: string, from: string, to: string, signal?: AbortSignal) =>
+        get<PageStat[]>(`/api/pages?${buildParams(siteId, from, to)}`, signal),
 
-    referrers: (siteId: string, from: string, to: string) =>
-        get<ReferrerStat[]>(`/api/referrers?${buildParams(siteId, from, to)}`),
+    referrers: (siteId: string, from: string, to: string, signal?: AbortSignal) =>
+        get<ReferrerStat[]>(`/api/referrers?${buildParams(siteId, from, to)}`, signal),
 
-    vitals: (siteId: string, from: string, to: string) =>
-        get<VitalStat[]>(`/api/vitals?${buildParams(siteId, from, to)}`),
+    vitals: (siteId: string, from: string, to: string, signal?: AbortSignal) =>
+        get<VitalStat[]>(`/api/vitals?${buildParams(siteId, from, to)}`, signal),
 
-    devices: (siteId: string, from: string, to: string) =>
-        get<DeviceStat[]>(`/api/devices?${buildParams(siteId, from, to)}`),
+    devices: (siteId: string, from: string, to: string, signal?: AbortSignal) =>
+        get<DeviceStat[]>(`/api/devices?${buildParams(siteId, from, to)}`, signal),
 
-    timeseries: (siteId: string, from: string, to: string) =>
-        get<{ date: string; pageviews: number }[]>(`/api/timeseries?${buildParams(siteId, from, to)}`),
+    timeseries: (siteId: string, from: string, to: string, signal?: AbortSignal) =>
+        get<{ date: string; pageviews: number }[]>(`/api/timeseries?${buildParams(siteId, from, to)}`, signal),
 
-    uniqueVisitorsTimeseries: (siteId: string, from: string, to: string) =>
-        get<{ date: string; uniqueVisitors: number }[]>(`/api/timeseries/visitors?${buildParams(siteId, from, to)}`),
+    uniqueVisitorsTimeseries: (siteId: string, from: string, to: string, signal?: AbortSignal) =>
+        get<{ date: string; uniqueVisitors: number }[]>(`/api/timeseries/visitors?${buildParams(siteId, from, to)}`, signal),
 
-    sessionsTimeseries: (siteId: string, from: string, to: string) =>
-        get<{ date: string; sessions: number }[]>(`/api/timeseries/sessions?${buildParams(siteId, from, to)}`),
+    sessionsTimeseries: (siteId: string, from: string, to: string, signal?: AbortSignal) =>
+        get<{ date: string; sessions: number }[]>(`/api/timeseries/sessions?${buildParams(siteId, from, to)}`, signal),
 
     sites: () =>
         get<SiteStat[]>(`/api/sites`),

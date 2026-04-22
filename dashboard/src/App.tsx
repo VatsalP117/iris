@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { format, subDays, subHours } from "date-fns";
 import { api, StatsResult, PageStat, ReferrerStat, VitalStat, DeviceStat, SiteStat } from "./api";
 import { StatsCards } from "./components/StatsCards";
@@ -96,6 +96,7 @@ export default function App() {
     const [visitorsData, setVisitorsData] = useState<DayBucket[]>([]);
     const [sessionsData, setSessionsData] = useState<DayBucket[]>([]);
     const [loading, setLoading] = useState(false);
+    const abortRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
         setSitesLoading(true);
@@ -110,17 +111,22 @@ export default function App() {
 
     const fetchAll = useCallback(async (siteId: string, range: DateWindow = windowRange) => {
         if (!siteId) return;
+        if (abortRef.current) {
+            abortRef.current.abort();
+        }
+        const controller = new AbortController();
+        abortRef.current = controller;
         setLoading(true);
         try {
             const [s, p, r, v, dev, ts, uv, sess] = await Promise.all([
-                api.stats(siteId, range.queryFrom, range.queryTo),
-                api.pages(siteId, range.queryFrom, range.queryTo),
-                api.referrers(siteId, range.queryFrom, range.queryTo),
-                api.vitals(siteId, range.queryFrom, range.queryTo),
-                api.devices(siteId, range.queryFrom, range.queryTo),
-                api.timeseries(siteId, range.queryFrom, range.queryTo),
-                api.uniqueVisitorsTimeseries(siteId, range.queryFrom, range.queryTo),
-                api.sessionsTimeseries(siteId, range.queryFrom, range.queryTo),
+                api.stats(siteId, range.queryFrom, range.queryTo, controller.signal),
+                api.pages(siteId, range.queryFrom, range.queryTo, controller.signal),
+                api.referrers(siteId, range.queryFrom, range.queryTo, controller.signal),
+                api.vitals(siteId, range.queryFrom, range.queryTo, controller.signal),
+                api.devices(siteId, range.queryFrom, range.queryTo, controller.signal),
+                api.timeseries(siteId, range.queryFrom, range.queryTo, controller.signal),
+                api.uniqueVisitorsTimeseries(siteId, range.queryFrom, range.queryTo, controller.signal),
+                api.sessionsTimeseries(siteId, range.queryFrom, range.queryTo, controller.signal),
             ]);
             setStats(s);
             setPages(p ?? []);
@@ -131,6 +137,7 @@ export default function App() {
             setVisitorsData(uv ?? []);
             setSessionsData(sess ?? []);
         } catch (err) {
+            if (err instanceof DOMException && err.name === "AbortError") return;
             console.error("Iris: fetch error", err);
         } finally {
             setLoading(false);
