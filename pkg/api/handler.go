@@ -43,7 +43,10 @@ func parseStatsQuery(w http.ResponseWriter, r *http.Request) (statsQuery, bool) 
 	return statsQuery{SiteID: siteID, From: q.Get("from"), To: q.Get("to")}, true
 }
 
+const maxBodyBytes = 1 << 20 // 1 MiB
+
 func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	var event core.Event
 	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
 		log.Printf("[TrackEvent] JSON decode error: %v", err)
@@ -71,6 +74,7 @@ func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {
 const maxBatchSize = 50
 
 func (h *Handler) TrackBatchEvents(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	var events []core.Event
 	if err := json.NewDecoder(r.Body).Decode(&events); err != nil {
 		log.Printf("[TrackBatchEvents] JSON decode error: %v", err)
