@@ -120,6 +120,7 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.Repo.GetStats(r.Context(), q.SiteID, q.From, q.To)
 	if err != nil {
+		log.Printf("[GetStats] query error: %v", err)
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
 	}
@@ -133,6 +134,7 @@ func (h *Handler) GetPages(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.Repo.GetTopPages(r.Context(), q.SiteID, q.From, q.To, 10)
 	if err != nil {
+		log.Printf("[GetPages] query error: %v", err)
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
 	}
@@ -146,6 +148,7 @@ func (h *Handler) GetReferrers(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.Repo.GetTopReferrers(r.Context(), q.SiteID, q.From, q.To, 10)
 	if err != nil {
+		log.Printf("[GetReferrers] query error: %v", err)
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
 	}
@@ -159,6 +162,7 @@ func (h *Handler) GetVitals(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.Repo.GetVitals(r.Context(), q.SiteID, q.From, q.To)
 	if err != nil {
+		log.Printf("[GetVitals] query error: %v", err)
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
 	}
@@ -172,6 +176,7 @@ func (h *Handler) GetDevices(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.Repo.GetDevices(r.Context(), q.SiteID, q.From, q.To)
 	if err != nil {
+		log.Printf("[GetDevices] query error: %v", err)
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
 	}
@@ -185,6 +190,7 @@ func (h *Handler) GetTimeSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.Repo.GetPageviewsTimeSeries(r.Context(), q.SiteID, q.From, q.To)
 	if err != nil {
+		log.Printf("[GetTimeSeries] query error: %v", err)
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
 	}
@@ -198,6 +204,7 @@ func (h *Handler) GetUniqueVisitorsTimeSeries(w http.ResponseWriter, r *http.Req
 	}
 	result, err := h.Repo.GetUniqueVisitorsTimeSeries(r.Context(), q.SiteID, q.From, q.To)
 	if err != nil {
+		log.Printf("[GetUniqueVisitorsTimeSeries] query error: %v", err)
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
 	}
@@ -211,6 +218,7 @@ func (h *Handler) GetSessionsTimeSeries(w http.ResponseWriter, r *http.Request) 
 	}
 	result, err := h.Repo.GetSessionsTimeSeries(r.Context(), q.SiteID, q.From, q.To)
 	if err != nil {
+		log.Printf("[GetSessionsTimeSeries] query error: %v", err)
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
 	}
@@ -220,6 +228,7 @@ func (h *Handler) GetSessionsTimeSeries(w http.ResponseWriter, r *http.Request) 
 func (h *Handler) ListSites(w http.ResponseWriter, r *http.Request) {
 	result, err := h.Repo.GetSites(r.Context())
 	if err != nil {
+		log.Printf("[ListSites] query error: %v", err)
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
 	}
