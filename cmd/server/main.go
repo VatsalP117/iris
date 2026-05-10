@@ -13,7 +13,9 @@ func main() {
 	port := getEnv("PORT", "8080")
 	dbPath := getEnv("DB_PATH", "./data/iris.db")
 
-	os.MkdirAll("data", 0755)
+	if err := os.MkdirAll("data", 0755); err != nil {
+		log.Fatal("Failed to create data directory:", err)
+	}
 
 	sqliteRepo, err := db.NewSqliteDB(dbPath)
 	if err != nil {
