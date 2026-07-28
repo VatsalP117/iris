@@ -33,6 +33,7 @@ pnpm-debug.log*
 /dashboard/dist/
 /dashboard/build/
 .turbo/
+/artifacts/reliability/
 
 *.db
 *.sqlite

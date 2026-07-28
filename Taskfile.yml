@@ -48,3 +48,26 @@ tasks:
     cmds:
       - pnpm build
       - npm publish
+
+  lab:build:
+    desc: Build the Iris Reliability Lab CLI
+    cmds:
+      - go build -o dist/iris-lab ./cmd/iris-lab
+
+  lab:run:
+    desc: Run the deterministic reliability oracle against an isolated Iris server
+    requires:
+      vars: [IRIS_LAB_DB]
+    vars:
+      IRIS_LAB_TARGET: '{{.IRIS_LAB_TARGET | default "http://127.0.0.1:8080"}}'
+      IRIS_LAB_RATE: '{{.IRIS_LAB_RATE | default "10"}}'
+      IRIS_LAB_DURATION: '{{.IRIS_LAB_DURATION | default "30s"}}'
+      IRIS_LAB_BATCH_SIZE: '{{.IRIS_LAB_BATCH_SIZE | default "1"}}'
+    cmds:
+      - >-
+        go run ./cmd/iris-lab run
+        --target "{{.IRIS_LAB_TARGET}}"
+        --db "{{.IRIS_LAB_DB}}"
+        --rate "{{.IRIS_LAB_RATE}}"
+        --duration "{{.IRIS_LAB_DURATION}}"
+        --batch-size "{{.IRIS_LAB_BATCH_SIZE}}"
