@@ -1,123 +1,235 @@
 # Iris Reliability Lab
 
-The Reliability Lab sends deterministic synthetic analytics traffic to an
-isolated Iris server and reconciles the accepted event sequences against the
-server's SQLite database.
+The Iris Reliability Lab is a deterministic correctness oracle, load generator,
+fault injector, profiler, and browser SDK test harness. It answers two separate
+questions:
 
-This first implementation measures:
+1. Did Iris store and report every event it accepted, exactly once and with the
+   expected fields?
+2. How much traffic can this server and SDK sustain, and where does it fail?
 
-- planned, attempted, accepted, rejected, and failed events;
-- individual and batched request throughput;
-- HTTP status distribution;
-- average, p50, p90, p95, p99, and maximum request latency;
-- maximum load-generator scheduling lag;
-- stored, missing, duplicate, unexpected, and mismatched event rows;
-- database file size; and
-- headline stats, page, and device API aggregates.
+The Go lab starts a real Iris server on a random loopback port with a dedicated
+SQLite database. Generated traffic carries a unique test run and sequence
+number, so the lab can reconcile the HTTP results, raw rows, and public API
+aggregates without relying on approximate counts.
 
-It writes both `report.md` and `summary.json`.
+## What is covered
 
-## Safety
+The complete suite measures and checks:
 
-Use a dedicated database and isolated Iris process. The CLI refuses non-loopback
-targets unless `--allow-nonlocal` is explicitly supplied, but a loopback server
-can still point at valuable data.
+- single-event and batch ingestion;
+- fixed-rate 100, 500, and 1,000 events/s profiles;
+- ramp, spike, mixed read/write, and 30-minute soak profiles;
+- planned, attempted, accepted, rejected, failed, missing, duplicate,
+  unexpected, and field-mismatched events;
+- HTTP status counts, request throughput, scheduling lag, and average, p50,
+  p90, p95, p99, and maximum latency;
+- concurrent reads of stats, pages, referrers, vitals, devices, and all three
+  time-series endpoints;
+- exact stats, pages, referrers, vitals, devices, pageview, visitor, and
+  session aggregate reconciliation;
+- date-only and date-time boundary behavior;
+- server CPU, RSS, process I/O, database growth, and WAL growth;
+- CPU, heap, and goroutine profiles;
+- restart, intermittent HTTP 503, network outage, SQLite lock, and SQLite-full
+  behavior;
+- online SQLite backup integrity, row reconciliation, restored-server boot,
+  and restored API responses;
+- browser SDK startup, duplicate starts, history navigation, hash changes,
+  multiple instances, stopping, page-hide flushing, storage failure, multi-tab
+  identity, offline/retry behavior, beacon fallback, and batching overhead;
+- an independent k6 fixed-arrival, ramp, spike, mixed-read, and browser driver;
+  and
+- baseline/candidate regression comparison.
 
-The lab never deletes the database. Every run uses a unique site and test run ID
-so its rows can be identified.
+Reports are emitted as Markdown for people and JSON for CI or later analysis.
 
-Generated reports under `artifacts/reliability/` are ignored by Git.
+## Safety and isolation
 
-## Run locally
+`iris-lab suite` and `iris-lab faults` create their own server, database, port,
+and artifact directory. This is the preferred way to run the oracle.
 
-Start Iris with a dedicated database:
+The lower-level `iris-lab run` command accepts an existing server and database.
+It refuses non-loopback targets unless `--allow-nonlocal` is supplied. A
+loopback server can still point at valuable data, so always use a disposable
+database.
+
+The lab does not delete databases. Generated artifacts under
+`artifacts/reliability/` are ignored by Git.
+
+## Fast development gate
+
+Build and run every profile with shortened durations:
 
 ```bash
-mkdir -p /tmp/iris-reliability
-DB_PATH=/tmp/iris-reliability/iris.db PORT=8080 go run ./cmd/server
+IRIS_LAB_QUICK=true task lab:suite
+IRIS_LAB_QUICK=true task lab:faults
+task lab:browser
 ```
 
-In another terminal, run a short smoke profile:
+The quick suite takes roughly one minute and still performs complete
+event-by-event and aggregate reconciliation. It is useful before a commit, but
+it is not a substitute for the full-duration capacity and soak runs.
+
+The browser command exits non-zero when it exposes an SDK defect. To collect a
+report while allowing the overall command to continue:
+
+```bash
+pnpm exec playwright install chromium # only when no system Chrome/Chromium exists
+pnpm lab:browser -- --allow-failures
+```
+
+Browser artifacts default to `artifacts/reliability/browser-<timestamp>/`.
+Set `IRIS_BROWSER_OUTPUT` to choose a stable directory.
+
+## Full profile suite
+
+Run all standard profiles:
+
+```bash
+task lab:suite
+```
+
+Profiles can be selected:
+
+```bash
+IRIS_LAB_PROFILES=target-500,target-1000 task lab:suite
+IRIS_LAB_PROFILES=mixed,ramp,spike task lab:suite
+IRIS_LAB_PROFILES=soak task lab:suite
+```
+
+Standard definitions:
+
+| Profile | Traffic |
+|---|---|
+| `smoke` | 10 events/s for 30 seconds |
+| `baseline` | 100 events/s for 2 minutes, single ingestion |
+| `target-500` | 500 events/s for 5 minutes, single ingestion |
+| `target-1000` | 1,000 events/s for 5 minutes, batches of 10 |
+| `mixed` | 500 events/s plus 25 analytics reads/s for 5 minutes |
+| `ramp` | 100, 500, 1,000, then 2,000 events/s; 2 minutes each |
+| `spike` | 100 events/s, 2,000 events/s spike, then recovery |
+| `soak` | 250 events/s plus 10 analytics reads/s for 30 minutes |
+
+Events per second and HTTP requests per second are reported separately. At
+1,000 events/s with batches of 10, Iris receives about 100 ingestion requests/s.
+
+Profiles write `summary.json`, `report.md`, `resources.csv`, and, when enabled,
+`cpu.pprof`, `heap.pprof`, and `goroutines.txt`. The suite root contains
+`suite-summary.json` and `suite-report.md`. Each profile has its own fresh
+server, database, and server log so earlier profiles cannot skew later results.
+
+## Fault and recovery suite
+
+Run the standard or shortened fault suite:
+
+```bash
+task lab:faults
+IRIS_LAB_QUICK=true task lab:faults
+```
+
+Injected transport failures are expected to reject some events. A fault
+scenario passes only when the server recovers and every event that received an
+accepted response exists exactly once with the correct data. The SQLite-full
+scenario must also demonstrate at least one rejected write.
+
+The backup scenario uses SQLite `VACUUM INTO`, runs `integrity_check`, reconciles
+the copied rows, boots a fresh Iris process from the copy, and validates all
+public aggregates against the accepted manifest.
+
+## Independent k6 driver
+
+k6 is run in Docker, so no host installation is required. Start an isolated
+Iris server, then pass the address visible from the container:
+
+```bash
+IRIS_K6_TARGET=http://host.docker.internal:8080 \
+IRIS_K6_RATE=500 \
+IRIS_K6_DURATION=5m \
+IRIS_K6_BATCH_SIZE=1 \
+task lab:k6
+```
+
+For batched 1,000 events/s and concurrent reads:
+
+```bash
+IRIS_K6_TARGET=http://host.docker.internal:8080 \
+IRIS_K6_RATE=1000 \
+IRIS_K6_DURATION=5m \
+IRIS_K6_BATCH_SIZE=10 \
+IRIS_K6_READ_RATE=25 \
+task lab:k6
+```
+
+Set `IRIS_K6_PROFILE=ramp` or `spike` for the staged k6 profiles. The raw script
+is [iris.js](./k6/iris.js).
+
+The optional k6 browser probe requires a k6 image with browser support and a
+running page:
+
+```bash
+docker run --rm -i \
+  -e K6_BROWSER_HEADLESS=true \
+  -e TARGET_PAGE=http://host.docker.internal:5173 \
+  grafana/k6:latest-with-browser \
+  run - < testing/load/k6/browser.js
+```
+
+## One-off deterministic runs
+
+For an existing disposable server:
 
 ```bash
 go run ./cmd/iris-lab run \
-    --target http://127.0.0.1:8080 \
-    --db /tmp/iris-reliability/iris.db \
-    --rate 10 \
-    --duration 30s \
-    --batch-size 1
+  --target http://127.0.0.1:8080 \
+  --db /tmp/iris-reliability/iris.db \
+  --rate 500 \
+  --duration 5m \
+  --batch-size 1 \
+  --read-rate 25
 ```
 
-The equivalent Task command is:
-
-```bash
-IRIS_LAB_DB=/tmp/iris-reliability/iris.db task lab:run
-```
-
-An exact event count can replace `rate × duration`, which is useful for quick
-correctness checks:
+Use `--events 1000` for an exact count, or supply staged rates:
 
 ```bash
 go run ./cmd/iris-lab run \
-    --db /tmp/iris-reliability/iris.db \
-    --rate 100 \
-    --events 1000 \
-    --batch-size 10
+  --target http://127.0.0.1:8080 \
+  --db /tmp/iris-reliability/iris.db \
+  --batch-size 10 \
+  --stages 100:30s,500:1m,1000:1m,2000:30s
 ```
 
-## Initial profiles
+## Compare revisions
 
-Run these only after the smoke profile passes:
+Use reports produced with identical load configurations:
 
 ```bash
-# 100 events/s for two minutes
-go run ./cmd/iris-lab run \
-    --db /tmp/iris-reliability/iris.db \
-    --rate 100 \
-    --duration 2m
-
-# 500 events/s for five minutes
-go run ./cmd/iris-lab run \
-    --db /tmp/iris-reliability/iris.db \
-    --rate 500 \
-    --duration 5m
-
-# 1,000 events/s for five minutes, in batches of 10
-go run ./cmd/iris-lab run \
-    --db /tmp/iris-reliability/iris.db \
-    --rate 1000 \
-    --duration 5m \
-    --batch-size 10
+IRIS_LAB_BASELINE=/path/to/baseline/summary.json \
+IRIS_LAB_CANDIDATE=/path/to/candidate/summary.json \
+task lab:compare
 ```
 
-Events per second and HTTP requests per second are intentionally reported
-separately. At 1,000 events/s with batches of 10, Iris receives approximately
-100 HTTP requests/s.
+The comparison requires matching load configurations, OS, architecture, and
+visible CPU count. It fails for incompatible runs or regressions beyond the
+built-in tolerances. Correctness errors, rejected events, missing rows, and
+duplicates have zero tolerance. Throughput, latency, CPU, RSS, read latency,
+and database bytes per event have explicit percentage thresholds.
 
-## Interpreting failures
+## Reading a failure
 
-The command exits unsuccessfully when:
+A normal correctness run fails when:
 
-- not every planned event was attempted and accepted;
-- an accepted event sequence is absent from SQLite;
-- a sequence is stored more than once;
-- a row exists for a sequence that was not accepted;
-- stored core fields differ from the generated event; or
-- stats, page, or device aggregates differ from the accepted manifest.
+- a planned event was not attempted and accepted;
+- an accepted sequence is absent, duplicated, unexpected, or changed in
+  SQLite;
+- an analytics endpoint fails during mixed load; or
+- a public aggregate differs from the accepted manifest.
 
-The Markdown report includes up to 50 example sequences for each mismatch type.
-The complete machine-readable summary is available in `summary.json`.
+The Markdown report includes diagnostic samples. `summary.json` contains the
+complete counters, timings, resource metrics, endpoint results, and verdict.
+The server log and Go profiles should be inspected next when reconciliation
+passes but latency, CPU, memory, or scheduling lag deteriorates.
 
-## Current boundary
-
-This is the deterministic correctness and HTTP-load core. Planned additions
-include:
-
-- k6 fixed-arrival, ramp, spike, and soak profiles;
-- concurrent dashboard reads;
-- browser SDK lifecycle and navigation flows;
-- CPU, memory, disk, WAL, and Go profile capture;
-- server restart and database fault injection; and
-- comparison reports across git revisions.
-
-See [the product roadmap](../../docs/ROADMAP.md) for the complete plan.
+Committed full-duration reference runs live in
+[`baselines/`](./baselines/). They describe the tested machine and revision;
+they are evidence for comparison, not universal production capacity claims.

@@ -71,3 +71,70 @@ tasks:
         --rate "{{.IRIS_LAB_RATE}}"
         --duration "{{.IRIS_LAB_DURATION}}"
         --batch-size "{{.IRIS_LAB_BATCH_SIZE}}"
+
+  lab:suite:
+    desc: Run the isolated Iris reliability profile suite
+    deps: [build:backend, lab:build]
+    vars:
+      IRIS_LAB_PROFILES: '{{.IRIS_LAB_PROFILES | default "smoke,baseline,target-500,target-1000,mixed,ramp,spike,soak"}}'
+      IRIS_LAB_QUICK: '{{.IRIS_LAB_QUICK | default "false"}}'
+      IRIS_LAB_PPROF: '{{.IRIS_LAB_PPROF | default "true"}}'
+    cmds:
+      - >-
+        dist/iris-lab suite
+        --server-bin dist/iris-server
+        --profiles "{{.IRIS_LAB_PROFILES}}"
+        --quick={{.IRIS_LAB_QUICK}}
+        --pprof={{.IRIS_LAB_PPROF}}
+
+  lab:faults:
+    desc: Run restart, network, SQLite, and backup/restore fault scenarios
+    deps: [build:backend, lab:build]
+    vars:
+      IRIS_LAB_QUICK: '{{.IRIS_LAB_QUICK | default "false"}}'
+    cmds:
+      - >-
+        dist/iris-lab faults
+        --server-bin dist/iris-server
+        --quick={{.IRIS_LAB_QUICK}}
+
+  lab:browser:
+    desc: Run the browser SDK lifecycle and delivery oracle
+    cmds:
+      - pnpm lab:browser
+
+  lab:k6:
+    desc: Run the k6 ingestion driver in Docker against an existing server
+    requires:
+      vars: [IRIS_K6_TARGET]
+    vars:
+      IRIS_K6_RATE: '{{.IRIS_K6_RATE | default "500"}}'
+      IRIS_K6_DURATION: '{{.IRIS_K6_DURATION | default "5m"}}'
+      IRIS_K6_BATCH_SIZE: '{{.IRIS_K6_BATCH_SIZE | default "1"}}'
+      IRIS_K6_READ_RATE: '{{.IRIS_K6_READ_RATE | default "0"}}'
+      IRIS_K6_PROFILE: '{{.IRIS_K6_PROFILE | default "constant"}}'
+    cmds:
+      - mkdir -p artifacts/reliability
+      - >-
+        docker run --rm
+        -v "{{.ROOT_DIR}}:/work"
+        -w /work
+        -e TARGET="{{.IRIS_K6_TARGET}}"
+        -e EVENT_RATE="{{.IRIS_K6_RATE}}"
+        -e DURATION="{{.IRIS_K6_DURATION}}"
+        -e BATCH_SIZE="{{.IRIS_K6_BATCH_SIZE}}"
+        -e READ_RATE="{{.IRIS_K6_READ_RATE}}"
+        -e PROFILE="{{.IRIS_K6_PROFILE}}"
+        -e K6_SUMMARY="/work/artifacts/reliability/k6-summary.json"
+        grafana/k6:latest run testing/load/k6/iris.js
+
+  lab:compare:
+    desc: Compare two reliability summary files and fail on regressions
+    requires:
+      vars: [IRIS_LAB_BASELINE, IRIS_LAB_CANDIDATE]
+    deps: [lab:build]
+    cmds:
+      - >-
+        dist/iris-lab compare
+        --baseline "{{.IRIS_LAB_BASELINE}}"
+        --candidate "{{.IRIS_LAB_CANDIDATE}}"

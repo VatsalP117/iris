@@ -1,0 +1,28 @@
+{
+  "run_id": "baseline-2026-07-29",
+  "generated_at": "2026-07-28T20:43:50.709885Z",
+  "server_binary": "/Users/vatsalpatel/Desktop/Projects/iris/dist/iris-server",
+  "profiles": [
+    {
+      "name": "target-500",
+      "report_path": "/Users/vatsalpatel/Desktop/Projects/iris/testing/load/baselines/2026-07-29/target-500/report.md",
+      "passed": false,
+      "events": 149963,
+      "event_rate": 500.0016020184662,
+      "p95_ms": 3.004958,
+      "peak_cpu_percent": 74.4,
+      "peak_rss_bytes": 72040448
+    },
+    {
+      "name": "target-1000",
+      "report_path": "/Users/vatsalpatel/Desktop/Projects/iris/testing/load/baselines/2026-07-29/target-1000/report.md",
+      "passed": true,
+      "events": 300000,
+      "event_rate": 1000.0231010903148,
+      "p95_ms": 4.101334,
+      "peak_cpu_percent": 107.8,
+      "peak_rss_bytes": 64897024
+    }
+  ],
+  "passed": false
+}

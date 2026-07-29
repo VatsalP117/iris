@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 
 	"github.com/VatsalP117/iris/pkg/core"
 	_ "github.com/mattn/go-sqlite3"
@@ -11,6 +12,34 @@ import (
 
 type SqliteRepository struct {
 	db *sql.DB
+}
+
+// ConstrainGrowthPages limits this database to its current size plus extraPages.
+// It exists for the isolated reliability lab's disk-exhaustion scenario.
+func (r *SqliteRepository) ConstrainGrowthPages(ctx context.Context, extraPages int) (int, error) {
+	if extraPages < 0 {
+		return 0, fmt.Errorf("extra pages must be non-negative")
+	}
+	var pageCount int
+	if err := r.db.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pageCount); err != nil {
+		return 0, err
+	}
+	var appliedLimit int
+	if err := r.db.QueryRowContext(
+		ctx,
+		fmt.Sprintf("PRAGMA max_page_count = %d", pageCount+extraPages),
+	).Scan(&appliedLimit); err != nil {
+		return 0, err
+	}
+	return appliedLimit, nil
+}
+
+func (r *SqliteRepository) ResetGrowthPageLimit(ctx context.Context) error {
+	var appliedLimit int
+	return r.db.QueryRowContext(
+		ctx,
+		"PRAGMA max_page_count = 1073741823",
+	).Scan(&appliedLimit)
 }
 
 func NewSqliteDB(filepath string) (*SqliteRepository, error) {

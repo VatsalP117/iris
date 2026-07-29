@@ -34,6 +34,9 @@ pnpm-debug.log*
 /dashboard/build/
 .turbo/
 /artifacts/reliability/
+/testing/load/baselines/**/server/
+/testing/load/baselines/**/server.log
+/testing/load/baselines/**/resources.csv
 
 *.db
 *.sqlite

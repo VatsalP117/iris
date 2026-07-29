@@ -165,20 +165,26 @@ each roadmap change.
 - first failed load level; and
 - evidence-backed bottleneck analysis.
 
-### Initial implementation
+### Implementation status
 
-The first implementation is a Go oracle and report generator that:
+The Reliability Lab is implemented. Its Go orchestrator now:
 
-- produces deterministic event payloads;
-- sends individual or batched requests at a configured event rate;
-- records the exact accepted sequence set;
-- reads the dedicated SQLite database;
-- reconciles stored rows against accepted events;
-- verifies headline API aggregates; and
-- writes JSON and Markdown reports.
+- produces deterministic event payloads and records the accepted sequence set;
+- runs fixed, mixed, ramp, spike, soak, individual, and batched traffic;
+- reconciles raw SQLite rows and every current public aggregate;
+- validates date boundaries while concurrent dashboard reads continue;
+- samples CPU, RSS, process I/O, database, and WAL growth;
+- captures CPU, heap, and goroutine profiles;
+- injects restart, transport, locking, and database-full failures;
+- validates backup integrity and boots Iris from the restored database;
+- compares compatible baseline and candidate reports; and
+- writes JSON, CSV, profile, log, and Markdown artifacts.
 
-High-volume k6 profiles, browser automation, system metrics, profiling, and
-failure injection will build on that deterministic core.
+The lab also includes independent k6 traffic scripts and a real-browser SDK
+oracle for lifecycle, navigation, beacon, storage, offline, multi-tab, and
+batching behavior. Full-duration reference reports are preserved under
+`testing/load/baselines/`; commands and interpretation guidance live in
+`testing/load/README.md`.
 
 ## Phase 2: Operational confidence
 

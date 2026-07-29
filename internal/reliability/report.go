@@ -53,11 +53,22 @@ func markdownReport(report *Report) string {
 	fmt.Fprintf(&builder, "| Offered rate | %d events/s |\n", report.Config.Rate)
 	fmt.Fprintf(&builder, "| Planned events | %d |\n", report.Config.EventCount)
 	fmt.Fprintf(&builder, "| Batch size | %d |\n", report.Config.BatchSize)
-	fmt.Fprintf(&builder, "| Workers | %d |\n\n", report.Config.Workers)
+	fmt.Fprintf(&builder, "| Workers | %d |\n", report.Config.Workers)
+	fmt.Fprintf(&builder, "| Concurrent read rate | %d requests/s |\n", report.Config.ReadRate)
+	fmt.Fprintf(&builder, "| Read workers | %d |\n\n", report.Config.ReadWorkers)
+	if len(report.Config.Stages) > 0 {
+		builder.WriteString("### Rate stages\n\n")
+		builder.WriteString("| Rate | Duration |\n|---:|---:|\n")
+		for _, stage := range report.Config.Stages {
+			fmt.Fprintf(&builder, "| %d events/s | %s |\n", stage.Rate, stage.Duration)
+		}
+		builder.WriteString("\n")
+	}
 
 	builder.WriteString("## Environment\n\n")
 	builder.WriteString("| Field | Value |\n|---|---|\n")
 	fmt.Fprintf(&builder, "| Git revision | `%s` |\n", report.Environment.GitRevision)
+	fmt.Fprintf(&builder, "| Git worktree modified | %t |\n", report.Environment.GitModified)
 	fmt.Fprintf(&builder, "| Go | `%s` |\n", report.Environment.GoVersion)
 	fmt.Fprintf(&builder, "| Platform | `%s/%s` |\n", report.Environment.GOOS, report.Environment.GOARCH)
 	fmt.Fprintf(&builder, "| CPUs visible to load generator | %d |\n\n", report.Environment.CPUs)
@@ -87,6 +98,53 @@ func markdownReport(report *Report) string {
 		builder.WriteString("\n")
 	}
 
+	if report.Config.ReadRate > 0 {
+		builder.WriteString("## Concurrent analytics reads\n\n")
+		builder.WriteString("| Measurement | Value |\n|---|---:|\n")
+		fmt.Fprintf(&builder, "| Requests attempted | %d |\n", report.Load.Reads.AttemptedRequests)
+		fmt.Fprintf(&builder, "| Requests successful | %d |\n", report.Load.Reads.SuccessfulRequests)
+		fmt.Fprintf(&builder, "| Requests failed | %d |\n", report.Load.Reads.FailedRequests)
+		fmt.Fprintf(&builder, "| Achieved rate | %.2f requests/s |\n", report.Load.Reads.AchievedRequestsPerSec)
+		fmt.Fprintf(&builder, "| p95 latency | %.2f ms |\n", report.Load.Reads.Latency.P95MS)
+		fmt.Fprintf(&builder, "| p99 latency | %.2f ms |\n\n", report.Load.Reads.Latency.P99MS)
+	}
+
+	if len(report.Load.Stages) > 0 {
+		builder.WriteString("## Stage results\n\n")
+		builder.WriteString("| Rate | Result | Accepted / planned | Events/s | p95 | p99 | Max lag |\n")
+		builder.WriteString("|---:|---|---:|---:|---:|---:|---:|\n")
+		firstFailedRate := 0
+		for _, stage := range report.Load.Stages {
+			passed := stage.AttemptedEvents == stage.PlannedEvents &&
+				stage.AcceptedEvents == stage.AttemptedEvents &&
+				stage.RequestErrors == 0
+			result := "PASS"
+			if !passed {
+				result = "FAIL"
+				if firstFailedRate == 0 {
+					firstFailedRate = stage.Rate
+				}
+			}
+			fmt.Fprintf(
+				&builder,
+				"| %d | %s | %d / %d | %.2f | %.2f ms | %.2f ms | %.2f ms |\n",
+				stage.Rate,
+				result,
+				stage.AcceptedEvents,
+				stage.PlannedEvents,
+				stage.AchievedEventsPerSec,
+				stage.Latency.P95MS,
+				stage.Latency.P99MS,
+				stage.MaxScheduleLagMS,
+			)
+		}
+		if firstFailedRate == 0 {
+			builder.WriteString("\nFirst failed offered load: none in this profile.\n\n")
+		} else {
+			fmt.Fprintf(&builder, "\nFirst failed offered load: **%d events/s**.\n\n", firstFailedRate)
+		}
+	}
+
 	builder.WriteString("## Storage reconciliation\n\n")
 	builder.WriteString("| Measurement | Value |\n|---|---:|\n")
 	fmt.Fprintf(&builder, "| Stored rows | %d |\n", report.Storage.StoredRows)
@@ -105,6 +163,18 @@ func markdownReport(report *Report) string {
 	fmt.Fprintf(&builder, "| p95 | %.2f |\n", report.Load.Latency.P95MS)
 	fmt.Fprintf(&builder, "| p99 | %.2f |\n", report.Load.Latency.P99MS)
 	fmt.Fprintf(&builder, "| Maximum | %.2f |\n\n", report.Load.Latency.MaxMS)
+
+	if report.Resources.Samples > 0 {
+		builder.WriteString("## Server resources\n\n")
+		builder.WriteString("| Measurement | Value |\n|---|---:|\n")
+		fmt.Fprintf(&builder, "| Samples | %d |\n", report.Resources.Samples)
+		fmt.Fprintf(&builder, "| Average CPU | %.2f%% |\n", report.Resources.AverageCPUPercent)
+		fmt.Fprintf(&builder, "| Peak CPU | %.2f%% |\n", report.Resources.PeakCPUPercent)
+		fmt.Fprintf(&builder, "| Average RSS | %d bytes |\n", report.Resources.AverageRSSBytes)
+		fmt.Fprintf(&builder, "| Peak RSS | %d bytes |\n", report.Resources.PeakRSSBytes)
+		fmt.Fprintf(&builder, "| Database growth | %d bytes |\n", report.Resources.DatabaseGrowthBytes)
+		fmt.Fprintf(&builder, "| Peak WAL | %d bytes |\n\n", report.Resources.PeakWALBytes)
+	}
 
 	builder.WriteString("## Aggregate checks\n\n")
 	builder.WriteString("| Check | Result | Error |\n|---|---|---|\n")

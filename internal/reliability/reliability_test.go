@@ -2,6 +2,7 @@ package reliability_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -72,7 +73,12 @@ func TestRunReconcilesSingleAndBatchIngestion(t *testing.T) {
 			mux.HandleFunc("/api/events", handler.TrackBatchEvents)
 			mux.HandleFunc("/api/stats", handler.GetStats)
 			mux.HandleFunc("/api/pages", handler.GetPages)
+			mux.HandleFunc("/api/referrers", handler.GetReferrers)
+			mux.HandleFunc("/api/vitals", handler.GetVitals)
 			mux.HandleFunc("/api/devices", handler.GetDevices)
+			mux.HandleFunc("/api/timeseries", handler.GetTimeSeries)
+			mux.HandleFunc("/api/timeseries/visitors", handler.GetUniqueVisitorsTimeSeries)
+			mux.HandleFunc("/api/timeseries/sessions", handler.GetSessionsTimeSeries)
 
 			server := httptest.NewServer(mux)
 			t.Cleanup(server.Close)
@@ -124,6 +130,200 @@ func TestRunReconcilesSingleAndBatchIngestion(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRunMeasuresConcurrentAnalyticsReads(t *testing.T) {
+	originalLogWriter := log.Writer()
+	log.SetOutput(io.Discard)
+	t.Cleanup(func() { log.SetOutput(originalLogWriter) })
+
+	dbPath := filepath.Join(t.TempDir(), "iris.db")
+	repo, err := db.NewSqliteDB(dbPath)
+	if err != nil {
+		t.Fatalf("NewSqliteDB returned error: %v", err)
+	}
+	t.Cleanup(func() { _ = repo.Close() })
+
+	handler := api.NewHandler(repo)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/event", handler.TrackEvent)
+	mux.HandleFunc("/api/events", handler.TrackBatchEvents)
+	mux.HandleFunc("/api/stats", handler.GetStats)
+	mux.HandleFunc("/api/pages", handler.GetPages)
+	mux.HandleFunc("/api/referrers", handler.GetReferrers)
+	mux.HandleFunc("/api/vitals", handler.GetVitals)
+	mux.HandleFunc("/api/devices", handler.GetDevices)
+	mux.HandleFunc("/api/timeseries", handler.GetTimeSeries)
+	mux.HandleFunc("/api/timeseries/visitors", handler.GetUniqueVisitorsTimeSeries)
+	mux.HandleFunc("/api/timeseries/sessions", handler.GetSessionsTimeSeries)
+
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	report, err := reliability.Run(context.Background(), reliability.Config{
+		TargetURL:      server.URL,
+		DBPath:         dbPath,
+		RunID:          "mixed-read-write",
+		SiteID:         "mixed-read-write",
+		Rate:           200,
+		EventCount:     200,
+		BatchSize:      10,
+		Workers:        8,
+		ReadRate:       20,
+		ReadWorkers:    4,
+		RequestTimeout: 2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if !report.Passed {
+		t.Fatalf("expected report to pass: %+v", report)
+	}
+	if report.Load.Reads.AttemptedRequests == 0 {
+		t.Fatal("expected concurrent read requests")
+	}
+	if report.Load.Reads.FailedRequests != 0 {
+		t.Fatalf("unexpected read failures: %+v", report.Load.Reads)
+	}
+}
+
+func TestRunSupportsDeterministicRateStages(t *testing.T) {
+	originalLogWriter := log.Writer()
+	log.SetOutput(io.Discard)
+	t.Cleanup(func() { log.SetOutput(originalLogWriter) })
+
+	dbPath := filepath.Join(t.TempDir(), "iris.db")
+	repo, err := db.NewSqliteDB(dbPath)
+	if err != nil {
+		t.Fatalf("NewSqliteDB returned error: %v", err)
+	}
+	t.Cleanup(func() { _ = repo.Close() })
+
+	handler := api.NewHandler(repo)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/event", handler.TrackEvent)
+	mux.HandleFunc("/api/events", handler.TrackBatchEvents)
+	mux.HandleFunc("/api/stats", handler.GetStats)
+	mux.HandleFunc("/api/pages", handler.GetPages)
+	mux.HandleFunc("/api/referrers", handler.GetReferrers)
+	mux.HandleFunc("/api/vitals", handler.GetVitals)
+	mux.HandleFunc("/api/devices", handler.GetDevices)
+	mux.HandleFunc("/api/timeseries", handler.GetTimeSeries)
+	mux.HandleFunc("/api/timeseries/visitors", handler.GetUniqueVisitorsTimeSeries)
+	mux.HandleFunc("/api/timeseries/sessions", handler.GetSessionsTimeSeries)
+
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	report, err := reliability.Run(context.Background(), reliability.Config{
+		TargetURL: server.URL,
+		DBPath:    dbPath,
+		RunID:     "staged-load",
+		SiteID:    "staged-load",
+		BatchSize: 10,
+		Workers:   8,
+		Stages: []reliability.RateStage{
+			{Rate: 500, Duration: 100 * time.Millisecond},
+			{Rate: 1000, Duration: 100 * time.Millisecond},
+		},
+		RequestTimeout: 2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if !report.Passed {
+		t.Fatalf("expected staged run to pass: %+v", report)
+	}
+	if report.Load.PlannedEvents != 150 || report.Load.AcceptedEvents != 150 {
+		t.Fatalf(
+			"staged event counts: planned=%d accepted=%d want 150",
+			report.Load.PlannedEvents,
+			report.Load.AcceptedEvents,
+		)
+	}
+	if len(report.Config.Stages) != 2 {
+		t.Fatalf("reported stages: got %d want 2", len(report.Config.Stages))
+	}
+	if len(report.Load.Stages) != 2 {
+		t.Fatalf("stage summaries: got %d want 2", len(report.Load.Stages))
+	}
+	if report.Load.Stages[0].AcceptedEvents != 50 ||
+		report.Load.Stages[1].AcceptedEvents != 100 {
+		t.Fatalf("unexpected stage summaries: %+v", report.Load.Stages)
+	}
+}
+
+func TestCompareReportsDetectsRegressionsAndConfigMismatch(t *testing.T) {
+	base := reliability.Report{
+		Passed: true,
+		Config: reliability.RunConfig{
+			Rate:       500,
+			EventCount: 1000,
+			BatchSize:  10,
+		},
+		Load: reliability.LoadSummary{
+			AcceptedEvents:       1000,
+			AchievedEventsPerSec: 500,
+			Latency: reliability.LatencySummary{
+				P95MS: 10,
+				P99MS: 20,
+			},
+		},
+		Resources: reliability.ResourceSummary{
+			PeakCPUPercent:      50,
+			PeakRSSBytes:        1000,
+			DatabaseGrowthBytes: 10_000,
+		},
+	}
+	candidate := base
+	candidate.Load.Latency.P95MS = 13
+	candidate.Resources.PeakRSSBytes = 1300
+
+	directory := t.TempDir()
+	baselinePath := filepath.Join(directory, "baseline.json")
+	candidatePath := filepath.Join(directory, "candidate.json")
+	writeJSONReport(t, baselinePath, base)
+	writeJSONReport(t, candidatePath, candidate)
+
+	comparison, err := reliability.CompareReports(baselinePath, candidatePath)
+	if err != nil {
+		t.Fatalf("CompareReports returned error: %v", err)
+	}
+	if comparison.Passed || comparison.Regressions != 2 {
+		t.Fatalf("expected two regressions: %+v", comparison)
+	}
+
+	candidate.Config.EventCount++
+	writeJSONReport(t, candidatePath, candidate)
+	comparison, err = reliability.CompareReports(baselinePath, candidatePath)
+	if err != nil {
+		t.Fatalf("CompareReports returned error: %v", err)
+	}
+	if comparison.Comparable || comparison.Passed {
+		t.Fatalf("expected configuration mismatch: %+v", comparison)
+	}
+
+	candidate.Config = base.Config
+	candidate.Environment.GOOS = "different-os"
+	writeJSONReport(t, candidatePath, candidate)
+	comparison, err = reliability.CompareReports(baselinePath, candidatePath)
+	if err != nil {
+		t.Fatalf("CompareReports returned error: %v", err)
+	}
+	if comparison.Comparable || comparison.Error != "execution environments differ" {
+		t.Fatalf("expected environment mismatch: %+v", comparison)
+	}
+}
+
+func writeJSONReport(t *testing.T, path string, report reliability.Report) {
+	t.Helper()
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("json.Marshal returned error: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatalf("os.WriteFile returned error: %v", err)
 	}
 }
 

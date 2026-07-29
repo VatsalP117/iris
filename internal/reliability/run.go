@@ -18,13 +18,16 @@ import (
 )
 
 type requestJob struct {
-	Events []PlannedEvent
-	DueAt  time.Time
+	Events     []PlannedEvent
+	DueAt      time.Time
+	StageIndex int
 }
 
 type requestResult struct {
 	Sequences   []int
 	Status      int
+	Response    string
+	StageIndex  int
 	Latency     time.Duration
 	ScheduleLag time.Duration
 	Err         error
@@ -56,15 +59,18 @@ func Run(ctx context.Context, config Config) (*Report, error) {
 	report := &Report{
 		GeneratedAt: time.Now().UTC(),
 		Config: RunConfig{
-			TargetURL:  normalized.TargetURL,
-			DBPath:     normalized.DBPath,
-			RunID:      normalized.RunID,
-			SiteID:     normalized.SiteID,
-			Rate:       normalized.Rate,
-			Duration:   normalized.Duration.String(),
-			EventCount: count,
-			BatchSize:  normalized.BatchSize,
-			Workers:    normalized.Workers,
+			TargetURL:   normalized.TargetURL,
+			DBPath:      normalized.DBPath,
+			RunID:       normalized.RunID,
+			SiteID:      normalized.SiteID,
+			Rate:        normalized.Rate,
+			Duration:    normalized.Duration.String(),
+			EventCount:  count,
+			BatchSize:   normalized.BatchSize,
+			Workers:     normalized.Workers,
+			ReadRate:    normalized.ReadRate,
+			ReadWorkers: normalized.ReadWorkers,
+			Stages:      stageConfigs(normalized.Stages),
 		},
 		Environment: currentEnvironment(),
 		Load:        load.Summary,
@@ -109,6 +115,13 @@ func normalizeConfig(config Config) (Config, int, error) {
 	if config.Duration <= 0 && config.EventCount <= 0 {
 		config.Duration = 30 * time.Second
 	}
+	if len(config.Stages) > 0 {
+		if config.EventCount > 0 {
+			return Config{}, 0, fmt.Errorf("event count and staged rates cannot be used together")
+		}
+		config.Duration = stagesDuration(config.Stages)
+		config.Rate = config.Stages[0].Rate
+	}
 	if config.BatchSize <= 0 {
 		config.BatchSize = 1
 	}
@@ -120,6 +133,12 @@ func normalizeConfig(config Config) (Config, int, error) {
 	}
 	if config.RequestTimeout <= 0 {
 		config.RequestTimeout = 5 * time.Second
+	}
+	if config.ReadRate < 0 {
+		return Config{}, 0, fmt.Errorf("read rate cannot be negative")
+	}
+	if config.ReadWorkers <= 0 {
+		config.ReadWorkers = 8
 	}
 
 	count, err := config.plannedEventCount()
@@ -156,6 +175,14 @@ func validRunID(value string) bool {
 }
 
 func executeLoad(ctx context.Context, config Config, manifest []PlannedEvent) (loadResult, error) {
+	readContext, stopReads := context.WithCancel(ctx)
+	readResults := make(chan ReadSummary, 1)
+	if config.ReadRate > 0 {
+		go func() {
+			readResults <- executeReadLoad(readContext, config)
+		}()
+	}
+
 	jobs := make(chan requestJob, config.Workers*8)
 	results := make(chan requestResult, config.Workers*8)
 	client := &http.Client{Timeout: config.RequestTimeout}
@@ -179,9 +206,13 @@ func executeLoad(ctx context.Context, config Config, manifest []PlannedEvent) (l
 	startedAt := time.Now()
 	go func() {
 		defer close(jobs)
-		for offset := 0; offset < len(manifest); offset += config.BatchSize {
+		for offset := 0; offset < len(manifest); {
 			end := min(offset+config.BatchSize, len(manifest))
-			dueAt := startedAt.Add(time.Duration(float64(time.Second) * float64(offset) / float64(config.Rate)))
+			stageIndex, stageEnd := stageForOffset(config, offset, len(manifest))
+			if stageEnd > offset && end > stageEnd {
+				end = stageEnd
+			}
+			dueAt := startedAt.Add(eventDueOffset(config, offset))
 			if wait := time.Until(dueAt); wait > 0 {
 				timer := time.NewTimer(wait)
 				select {
@@ -194,8 +225,13 @@ func executeLoad(ctx context.Context, config Config, manifest []PlannedEvent) (l
 			select {
 			case <-ctx.Done():
 				return
-			case jobs <- requestJob{Events: manifest[offset:end], DueAt: dueAt}:
+			case jobs <- requestJob{
+				Events:     manifest[offset:end],
+				DueAt:      dueAt,
+				StageIndex: stageIndex,
+			}:
 			}
+			offset = end
 		}
 	}()
 
@@ -205,6 +241,18 @@ func executeLoad(ctx context.Context, config Config, manifest []PlannedEvent) (l
 	}
 	accepted := make(map[int]struct{}, len(manifest))
 	latencies := make([]time.Duration, 0, (len(manifest)+config.BatchSize-1)/config.BatchSize)
+	stageLatencies := make([][]time.Duration, len(config.Stages))
+	if len(config.Stages) > 0 {
+		summary.Stages = make([]StageSummary, len(config.Stages))
+		for index, stage := range config.Stages {
+			summary.Stages[index] = StageSummary{
+				Rate:          stage.Rate,
+				Duration:      stage.Duration.String(),
+				PlannedEvents: int(float64(stage.Rate) * stage.Duration.Seconds()),
+				StatusCodes:   map[int]int{},
+			}
+		}
+	}
 
 	for result := range results {
 		eventCount := len(result.Sequences)
@@ -214,27 +262,58 @@ func executeLoad(ctx context.Context, config Config, manifest []PlannedEvent) (l
 		if result.ScheduleLag.Seconds()*1000 > summary.MaxScheduleLagMS {
 			summary.MaxScheduleLagMS = result.ScheduleLag.Seconds() * 1000
 		}
+		var stage *StageSummary
+		if result.StageIndex >= 0 && result.StageIndex < len(summary.Stages) {
+			stage = &summary.Stages[result.StageIndex]
+			stage.AttemptedEvents += eventCount
+			stage.AttemptedRequests++
+			stageLatencies[result.StageIndex] = append(stageLatencies[result.StageIndex], result.Latency)
+			if lagMS := result.ScheduleLag.Seconds() * 1000; lagMS > stage.MaxScheduleLagMS {
+				stage.MaxScheduleLagMS = lagMS
+			}
+		}
 
 		if result.Err != nil {
 			summary.RequestErrors++
 			summary.RejectedEvents += eventCount
+			if stage != nil {
+				stage.RequestErrors++
+				stage.RejectedEvents += eventCount
+			}
 			appendErrorSample(&summary.ErrorSamples, result.Err.Error())
 			continue
 		}
 
 		summary.StatusCodes[result.Status]++
+		if stage != nil {
+			stage.StatusCodes[result.Status]++
+		}
 		if result.Status == http.StatusAccepted {
 			summary.AcceptedRequests++
 			summary.AcceptedEvents += eventCount
 			for _, sequence := range result.Sequences {
 				accepted[sequence] = struct{}{}
 			}
+			if stage != nil {
+				stage.AcceptedEvents += eventCount
+			}
 			continue
 		}
 
 		summary.RejectedRequests++
 		summary.RejectedEvents += eventCount
-		appendErrorSample(&summary.ErrorSamples, fmt.Sprintf("HTTP %d for %d event(s)", result.Status, eventCount))
+		if stage != nil {
+			stage.RejectedEvents += eventCount
+		}
+		detail := strings.TrimSpace(result.Response)
+		if detail != "" {
+			appendErrorSample(
+				&summary.ErrorSamples,
+				fmt.Sprintf("HTTP %d for %d event(s): %s", result.Status, eventCount, detail),
+			)
+		} else {
+			appendErrorSample(&summary.ErrorSamples, fmt.Sprintf("HTTP %d for %d event(s)", result.Status, eventCount))
+		}
 	}
 
 	elapsed := time.Since(startedAt)
@@ -244,6 +323,19 @@ func executeLoad(ctx context.Context, config Config, manifest []PlannedEvent) (l
 		summary.AchievedRequestsPerSec = float64(summary.AttemptedRequests) / summary.ElapsedSeconds
 	}
 	summary.Latency = summarizeLatencies(latencies)
+	for index := range summary.Stages {
+		stage := &summary.Stages[index]
+		duration := config.Stages[index].Duration.Seconds()
+		if duration > 0 {
+			stage.AchievedEventsPerSec = float64(stage.AttemptedEvents) / duration
+			stage.AchievedRequestsPerSec = float64(stage.AttemptedRequests) / duration
+		}
+		stage.Latency = summarizeLatencies(stageLatencies[index])
+	}
+	stopReads()
+	if config.ReadRate > 0 {
+		summary.Reads = <-readResults
+	}
 
 	if ctx.Err() != nil {
 		return loadResult{}, ctx.Err()
@@ -268,12 +360,12 @@ func sendRequest(ctx context.Context, client *http.Client, targetURL string, bat
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return requestResult{Sequences: sequences, Err: err}
+		return requestResult{Sequences: sequences, StageIndex: job.StageIndex, Err: err}
 	}
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL+endpoint, bytes.NewReader(body))
 	if err != nil {
-		return requestResult{Sequences: sequences, Err: err}
+		return requestResult{Sequences: sequences, StageIndex: job.StageIndex, Err: err}
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", "iris-reliability-lab")
@@ -288,19 +380,73 @@ func sendRequest(ctx context.Context, client *http.Client, targetURL string, bat
 	if err != nil {
 		return requestResult{
 			Sequences:   sequences,
+			StageIndex:  job.StageIndex,
 			Latency:     latency,
 			ScheduleLag: scheduleLag,
 			Err:         err,
 		}
 	}
 	defer response.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
+	responseBody, _ := io.ReadAll(io.LimitReader(response.Body, 64<<10))
 	return requestResult{
 		Sequences:   sequences,
 		Status:      response.StatusCode,
+		Response:    string(responseBody),
+		StageIndex:  job.StageIndex,
 		Latency:     latency,
 		ScheduleLag: scheduleLag,
 	}
+}
+
+func stageForOffset(config Config, eventOffset, eventCount int) (int, int) {
+	if len(config.Stages) == 0 {
+		return -1, eventCount
+	}
+	boundary := 0
+	for index, stage := range config.Stages {
+		boundary += int(float64(stage.Rate) * stage.Duration.Seconds())
+		if eventOffset < boundary {
+			return index, boundary
+		}
+	}
+	return len(config.Stages) - 1, eventCount
+}
+
+func eventDueOffset(config Config, eventOffset int) time.Duration {
+	if len(config.Stages) == 0 {
+		return time.Duration(float64(time.Second) * float64(eventOffset) / float64(config.Rate))
+	}
+
+	remaining := eventOffset
+	var elapsed time.Duration
+	for _, stage := range config.Stages {
+		stageEvents := int(float64(stage.Rate) * stage.Duration.Seconds())
+		if remaining < stageEvents {
+			return elapsed + time.Duration(float64(time.Second)*float64(remaining)/float64(stage.Rate))
+		}
+		remaining -= stageEvents
+		elapsed += stage.Duration
+	}
+	return elapsed
+}
+
+func stagesDuration(stages []RateStage) time.Duration {
+	var duration time.Duration
+	for _, stage := range stages {
+		duration += stage.Duration
+	}
+	return duration
+}
+
+func stageConfigs(stages []RateStage) []RateStageConfig {
+	configs := make([]RateStageConfig, len(stages))
+	for index, stage := range stages {
+		configs[index] = RateStageConfig{
+			Rate:     stage.Rate,
+			Duration: stage.Duration.String(),
+		}
+	}
+	return configs
 }
 
 func summarizeLatencies(values []time.Duration) LatencySummary {
@@ -346,9 +492,11 @@ func currentEnvironment() Environment {
 	}
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
-			if setting.Key == "vcs.revision" {
+			switch setting.Key {
+			case "vcs.revision":
 				environment.GitRevision = setting.Value
-				break
+			case "vcs.modified":
+				environment.GitModified = setting.Value == "true"
 			}
 		}
 	}
@@ -362,7 +510,8 @@ func reportPasses(report *Report) bool {
 		report.Storage.MissingEvents != 0 ||
 		report.Storage.DuplicateRows != 0 ||
 		report.Storage.UnexpectedRows != 0 ||
-		report.Storage.FieldMismatches != 0 {
+		report.Storage.FieldMismatches != 0 ||
+		report.Load.Reads.FailedRequests != 0 {
 		return false
 	}
 	for _, check := range report.Aggregates {
