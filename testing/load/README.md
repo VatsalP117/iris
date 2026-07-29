@@ -181,6 +181,12 @@ scenario passes only when the server recovers and every event that received an
 accepted response exists exactly once with the correct data. The SQLite-full
 scenario must also demonstrate at least one rejected write.
 
+If a connection disappears after storage but before the response reaches the
+client, the report counts that row as unexpected/ambiguous. It remains visible
+as a delivery-risk metric, but does not fail the storage invariant unless the
+row is duplicated or malformed. Client retry behavior for this case is checked
+separately by the browser oracle.
+
 The backup scenario uses SQLite `VACUUM INTO`, runs `integrity_check`, reconciles
 the copied rows, boots a fresh Iris process from the copy, and validates all
 public aggregates against the accepted manifest.

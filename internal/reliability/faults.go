@@ -218,6 +218,10 @@ func runSQLiteLockFault(
 	server *LabServer,
 ) FaultResult {
 	loadConfig := faultLoadConfig(config, server, "sqlite-lock")
+	// Keep this storage-contention scenario separate from the ambiguous-response
+	// scenario: every request must receive a definitive response after the lock
+	// clears so the accepted-event manifest remains authoritative.
+	loadConfig.RequestTimeout = 10 * time.Second
 	faultDone := make(chan error, 1)
 	go func() {
 		time.Sleep(loadConfig.Duration / 3)
@@ -296,7 +300,6 @@ func finalizeFaultResult(
 		faultErr == nil &&
 		report.Storage.MissingEvents == 0 &&
 		report.Storage.DuplicateRows == 0 &&
-		report.Storage.UnexpectedRows == 0 &&
 		report.Storage.FieldMismatches == 0
 	return result
 }
