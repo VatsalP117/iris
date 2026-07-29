@@ -15,9 +15,9 @@ const sections = [
 ];
 
 const CodeBlock = ({ children, title }: { children: string; title?: string }) => (
-  <div className="rounded-xl overflow-hidden border border-white/10 my-6 shadow-lg">
+  <div className="docs-code-block rounded-xl overflow-hidden border border-white/10 my-6 shadow-lg">
     {title && (
-      <div className="bg-white/5 px-4 py-2.5 border-b border-white/10 flex items-center gap-2">
+      <div className="docs-code-header bg-white/5 px-4 py-2.5 border-b border-white/10 flex items-center gap-2">
         <div className="w-2.5 h-2.5 rounded-full bg-red-500/40" />
         <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/40" />
         <div className="w-2.5 h-2.5 rounded-full bg-green-500/40" />
@@ -31,7 +31,7 @@ const CodeBlock = ({ children, title }: { children: string; title?: string }) =>
 );
 
 const PropTable = ({ rows }: { rows: [string, string, string, string][] }) => (
-  <div className="overflow-x-auto my-6 rounded-xl border border-white/10">
+  <div className="docs-table overflow-x-auto my-6 rounded-xl border border-white/10">
     <table className="w-full text-sm">
       <thead>
         <tr className="bg-white/5 border-b border-white/10">
@@ -63,7 +63,7 @@ const Callout = ({ type, children }: { type: 'tip' | 'warning' | 'info'; childre
   };
   const labels = { tip: 'Tip', warning: 'Warning', info: 'Info' };
   return (
-    <div className={`border rounded-xl px-5 py-4 my-6 ${styles[type]}`}>
+    <div className={`docs-callout docs-callout--${type} border rounded-xl px-5 py-4 my-6 ${styles[type]}`}>
       <span className="font-bold text-xs uppercase tracking-wider">{labels[type]}</span>
       <div className="mt-1.5 text-muted-foreground text-sm leading-relaxed">{children}</div>
     </div>
@@ -74,7 +74,7 @@ export default function Docs() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen flex pt-16">
+    <div className="docs-page min-h-screen flex pt-[72px]">
       {/* Mobile sidebar toggle */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -90,9 +90,9 @@ export default function Docs() {
 
       {/* Sidebar */}
       <aside className={`
-        fixed top-16 bottom-0 w-72 border-r border-white/5 bg-background/95 backdrop-blur-xl z-40 overflow-y-auto
+        docs-sidebar fixed top-[72px] bottom-0 w-72 border-r border-white/5 bg-background/95 backdrop-blur-xl z-40 overflow-y-auto
         transition-transform duration-300 ease-in-out
-        lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:self-start lg:translate-x-0 lg:z-0
+        lg:sticky lg:top-[72px] lg:h-[calc(100vh-72px)] lg:self-start lg:translate-x-0 lg:z-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="p-6">
@@ -129,9 +129,9 @@ export default function Docs() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 max-w-4xl mx-auto px-6 sm:px-8 lg:px-12 py-12 lg:py-16">
+      <main className="docs-content flex-1 max-w-4xl mx-auto px-6 sm:px-8 lg:px-12 py-12 lg:py-16">
         {/* Header */}
-        <div className="mb-16">
+        <div className="docs-header mb-16">
           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20 mb-4">
             v0.2.2
           </span>
@@ -363,14 +363,14 @@ services:
 
           <h3>Event Ingestion</h3>
           <div className="space-y-4 my-6">
-            <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
+            <div className="docs-api-card p-4 rounded-xl bg-white/[0.03] border border-white/10">
               <div className="flex items-center gap-3 mb-2">
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-green-500/15 text-green-400 border border-green-500/20">POST</span>
                 <code className="text-sm font-mono text-foreground">/api/event</code>
               </div>
               <p className="text-sm text-muted-foreground">Track a single event. Body is a JSON event payload.</p>
             </div>
-            <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
+            <div className="docs-api-card p-4 rounded-xl bg-white/[0.03] border border-white/10">
               <div className="flex items-center gap-3 mb-2">
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-green-500/15 text-green-400 border border-green-500/20">POST</span>
                 <code className="text-sm font-mono text-foreground">/api/events</code>
@@ -405,7 +405,7 @@ services:
               { method: 'GET', path: '/api/timeseries', desc: 'Daily pageview counts (for chart visualization)' },
               { method: 'GET', path: '/api/sites', desc: 'List all tracked sites and their domains' },
             ].map(({ method, path, desc }) => (
-              <div key={path} className="p-4 rounded-xl bg-white/[0.03] border border-white/10 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <div key={path} className="docs-api-card p-4 rounded-xl bg-white/[0.03] border border-white/10 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                 <div className="flex items-center gap-3 shrink-0">
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-primary/15 text-primary border border-primary/20">{method}</span>
                   <code className="text-sm font-mono text-foreground">{path}</code>
@@ -431,19 +431,19 @@ services:
           <p>Iris is designed from the ground up to be privacy-respecting. Here's how it works:</p>
 
           <div className="space-y-6 mt-8">
-            <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10">
+            <div className="docs-privacy-card p-6 rounded-2xl bg-white/[0.03] border border-white/10">
               <h4 className="font-bold mb-2">🍪 Zero Cookies</h4>
               <p className="text-sm text-muted-foreground leading-relaxed">Iris never sets any cookies. Visitor and session IDs are stored in <code>localStorage</code> and <code>sessionStorage</code>, which are first-party and inaccessible to third-party scripts.</p>
             </div>
-            <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10">
+            <div className="docs-privacy-card p-6 rounded-2xl bg-white/[0.03] border border-white/10">
               <h4 className="font-bold mb-2">🔄 Daily-Rotating Visitor IDs</h4>
               <p className="text-sm text-muted-foreground leading-relaxed">Visitor IDs are regenerated every UTC day. This prevents long-term tracking of individual users while still providing meaningful daily analytics.</p>
             </div>
-            <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10">
+            <div className="docs-privacy-card p-6 rounded-2xl bg-white/[0.03] border border-white/10">
               <h4 className="font-bold mb-2">📍 No PII Collection</h4>
               <p className="text-sm text-muted-foreground leading-relaxed">Iris doesn't collect IP addresses, user agents, or any personally identifiable information. All tracking data is anonymous by default.</p>
             </div>
-            <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10">
+            <div className="docs-privacy-card p-6 rounded-2xl bg-white/[0.03] border border-white/10">
               <h4 className="font-bold mb-2">🏠 Self-Hosted Only</h4>
               <p className="text-sm text-muted-foreground leading-relaxed">Your data lives on your server, in your SQLite database. Nothing is ever sent to third parties. No analytics SaaS, no tracking networks, no data brokers.</p>
             </div>
