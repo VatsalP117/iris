@@ -3,7 +3,9 @@ package api
 import (
 	"encoding/json"
 	"log"
+	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/VatsalP117/iris/pkg/core"
@@ -127,6 +129,39 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *Handler) GetSiteTrends(w http.ResponseWriter, r *http.Request) {
+	q, ok := parseStatsQuery(w, r)
+	if !ok {
+		return
+	}
+
+	current, err := h.Repo.GetStats(r.Context(), q.SiteID, q.From, q.To)
+	if err != nil {
+		log.Printf("[GetSiteTrends] current-period query error: %v", err)
+		http.Error(w, "Query failed", http.StatusInternalServerError)
+		return
+	}
+
+	result := core.SiteTrendResult{Current: *current}
+	previousFrom, previousTo, hasPrevious := previousPeriod(q.From, q.To)
+	if hasPrevious {
+		previous, queryErr := h.Repo.GetStats(r.Context(), q.SiteID, previousFrom, previousTo)
+		if queryErr != nil {
+			log.Printf("[GetSiteTrends] previous-period query error: %v", queryErr)
+			http.Error(w, "Query failed", http.StatusInternalServerError)
+			return
+		}
+		result.Previous = *previous
+		result.Change = core.StatsChange{
+			Pageviews:      percentChange(current.Pageviews, previous.Pageviews),
+			UniqueVisitors: percentChange(current.UniqueVisitors, previous.UniqueVisitors),
+			Sessions:       percentChange(current.Sessions, previous.Sessions),
+		}
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *Handler) GetPages(w http.ResponseWriter, r *http.Request) {
 	q, ok := parseStatsQuery(w, r)
 	if !ok {
@@ -163,6 +198,106 @@ func (h *Handler) GetVitals(w http.ResponseWriter, r *http.Request) {
 	result, err := h.Repo.GetVitals(r.Context(), q.SiteID, q.From, q.To)
 	if err != nil {
 		log.Printf("[GetVitals] query error: %v", err)
+		http.Error(w, "Query failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) GetVitalDistributions(w http.ResponseWriter, r *http.Request) {
+	q, ok := parseStatsQuery(w, r)
+	if !ok {
+		return
+	}
+	result, err := h.Repo.GetVitalDistributions(r.Context(), q.SiteID, q.From, q.To)
+	if err != nil {
+		log.Printf("[GetVitalDistributions] query error: %v", err)
+		http.Error(w, "Query failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) GetPagePerformance(w http.ResponseWriter, r *http.Request) {
+	q, ok := parseStatsQuery(w, r)
+	if !ok {
+		return
+	}
+	result, err := h.Repo.GetPagePerformance(r.Context(), q.SiteID, q.From, q.To, 20)
+	if err != nil {
+		log.Printf("[GetPagePerformance] query error: %v", err)
+		http.Error(w, "Query failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) GetPerformanceScore(w http.ResponseWriter, r *http.Request) {
+	q, ok := parseStatsQuery(w, r)
+	if !ok {
+		return
+	}
+	result, err := h.Repo.GetPerformanceScore(r.Context(), q.SiteID, q.From, q.To)
+	if err != nil {
+		log.Printf("[GetPerformanceScore] query error: %v", err)
+		http.Error(w, "Query failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) GetCustomEvents(w http.ResponseWriter, r *http.Request) {
+	q, ok := parseStatsQuery(w, r)
+	if !ok {
+		return
+	}
+
+	result, err := h.Repo.GetCustomEvents(r.Context(), q.SiteID, q.From, q.To)
+	if err != nil {
+		log.Printf("[GetCustomEvents] current-period query error: %v", err)
+		http.Error(w, "Query failed", http.StatusInternalServerError)
+		return
+	}
+
+	previousFrom, previousTo, hasPrevious := previousPeriod(q.From, q.To)
+	if hasPrevious {
+		previous, queryErr := h.Repo.GetCustomEvents(r.Context(), q.SiteID, previousFrom, previousTo)
+		if queryErr != nil {
+			log.Printf("[GetCustomEvents] previous-period query error: %v", queryErr)
+			http.Error(w, "Query failed", http.StatusInternalServerError)
+			return
+		}
+
+		result.Summary.ChangePercent = percentChange(result.Summary.TotalEvents, previous.Summary.TotalEvents)
+		previousCounts := make(map[string]int, len(previous.Events))
+		for _, event := range previous.Events {
+			previousCounts[event.EventName] = event.TotalCount
+		}
+		for i := range result.Events {
+			result.Events[i].ChangePercent = percentChange(
+				result.Events[i].TotalCount,
+				previousCounts[result.Events[i].EventName],
+			)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) GetCustomEventTimeSeries(w http.ResponseWriter, r *http.Request) {
+	q, ok := parseStatsQuery(w, r)
+	if !ok {
+		return
+	}
+	eventName := strings.TrimSpace(r.URL.Query().Get("event_name"))
+	if eventName == "" || strings.HasPrefix(eventName, "$") {
+		http.Error(w, "valid custom event_name is required", http.StatusBadRequest)
+		return
+	}
+
+	result, err := h.Repo.GetCustomEventTimeSeries(r.Context(), q.SiteID, eventName, q.From, q.To)
+	if err != nil {
+		log.Printf("[GetCustomEventTimeSeries] query error: %v", err)
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
 	}
@@ -233,6 +368,55 @@ func (h *Handler) ListSites(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func previousPeriod(from, to string) (string, string, bool) {
+	start, ok := parsePeriodTime(from, false)
+	if !ok {
+		return "", "", false
+	}
+	end, ok := parsePeriodTime(to, true)
+	if !ok || !end.After(start) {
+		return "", "", false
+	}
+
+	duration := end.Sub(start)
+	previousEnd := start.Add(-time.Nanosecond)
+	previousStart := previousEnd.Add(-duration)
+	return previousStart.UTC().Format(time.RFC3339Nano), previousEnd.UTC().Format(time.RFC3339Nano), true
+}
+
+func parsePeriodTime(value string, endOfDate bool) (time.Time, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, false
+	}
+
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02T15:04:05-07:00"} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed, true
+		}
+	}
+
+	parsed, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return time.Time{}, false
+	}
+	if endOfDate {
+		parsed = parsed.Add(24*time.Hour - time.Nanosecond)
+	}
+	return parsed, true
+}
+
+func percentChange(current, previous int) float64 {
+	if previous == 0 {
+		if current == 0 {
+			return 0
+		}
+		return 100
+	}
+	change := (float64(current-previous) / float64(previous)) * 100
+	return math.Round(change*10) / 10
 }
 
 func truncateStrings(data any, maxLen int) any {

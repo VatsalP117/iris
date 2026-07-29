@@ -29,9 +29,9 @@ interface Props {
 export type MetricKey = "uniqueVisitors" | "pageviews" | "sessions";
 
 const METRICS: { key: MetricKey; label: string; color: string }[] = [
-    { key: "uniqueVisitors", label: "Visitors", color: "#c25e00" },
-    { key: "pageviews", label: "Pageviews", color: "#1c1917" },
-    { key: "sessions", label: "Sessions", color: "#57534e" },
+    { key: "uniqueVisitors", label: "Visitors", color: "#4f46e5" },
+    { key: "pageviews", label: "Pageviews", color: "#3525cd" },
+    { key: "sessions", label: "Sessions", color: "#087a52" },
 ];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -39,18 +39,18 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     return (
         <div
             style={{
-                background: "var(--bg-surface)",
-                border: "1px solid var(--border)",
+                background: "var(--surface)",
+                border: "1px solid var(--outline)",
                 borderRadius: "var(--radius-md)",
                 padding: "12px 16px",
                 fontSize: 12,
                 minWidth: 170,
-                boxShadow: "var(--shadow-lg)",
+                boxShadow: "var(--shadow-float)",
                 fontFamily: "var(--font-sans)",
             }}
         >
             <div style={{
-                color: "var(--text-tertiary)",
+                color: "var(--text-subtle)",
                 marginBottom: 8,
                 fontSize: 11,
                 textTransform: "uppercase",
@@ -72,7 +72,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                             marginTop: 4,
                         }}
                     >
-                        <span style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 8 }}>
                             <span
                                 style={{
                                     width: 6,
@@ -85,7 +85,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                             {metric?.label ?? entry.dataKey}
                         </span>
                         <span style={{
-                            color: "var(--text-primary)",
+                            color: "var(--text)",
                             fontWeight: 600,
                             fontFamily: "var(--font-mono)",
                             fontSize: 13,
@@ -135,8 +135,11 @@ export function PageviewsChart({ pageviewsData, visitorsData, sessionsData, load
     return (
         <div className="card">
             <div className="card-header">
+                <div>
+                    <span className="card-title">Daily Traffic Analysis</span>
+                    <div className="card-meta">Visualizing site activity over the selected period</div>
+                </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                    <span className="card-title">Traffic</span>
                     <div className="metric-toggle-group">
                         {METRICS.map((metric) => (
                             <button
@@ -152,8 +155,8 @@ export function PageviewsChart({ pageviewsData, visitorsData, sessionsData, load
                             </button>
                         ))}
                     </div>
+                    <span className="card-meta">{windowLabel}</span>
                 </div>
-                <span className="card-meta">{windowLabel}</span>
             </div>
             <div className="card-body">
                 <div className="chart-container">
@@ -166,28 +169,28 @@ export function PageviewsChart({ pageviewsData, visitorsData, sessionsData, load
                             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="gradUV" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#c25e00" stopOpacity={0.12} />
-                                        <stop offset="100%" stopColor="#c25e00" stopOpacity={0} />
+                                        <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.16} />
+                                        <stop offset="100%" stopColor="#4f46e5" stopOpacity={0} />
                                     </linearGradient>
                                     <linearGradient id="gradPV" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#1c1917" stopOpacity={0.08} />
-                                        <stop offset="100%" stopColor="#1c1917" stopOpacity={0} />
+                                        <stop offset="0%" stopColor="#3525cd" stopOpacity={0.08} />
+                                        <stop offset="100%" stopColor="#3525cd" stopOpacity={0} />
                                     </linearGradient>
                                     <linearGradient id="gradSess" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#57534e" stopOpacity={0.08} />
-                                        <stop offset="100%" stopColor="#57534e" stopOpacity={0} />
+                                        <stop offset="0%" stopColor="#087a52" stopOpacity={0.08} />
+                                        <stop offset="100%" stopColor="#087a52" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-light)" />
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--outline)" />
                                 <XAxis
                                     dataKey="date"
-                                    tick={{ fontSize: 11, fill: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}
+                                    tick={{ fontSize: 11, fill: "var(--text-subtle)", fontFamily: "var(--font-mono)" }}
                                     tickFormatter={(v) => format(parseISO(v), "MMM d")}
                                     axisLine={false}
                                     tickLine={false}
                                 />
                                 <YAxis
-                                    tick={{ fontSize: 11, fill: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}
+                                    tick={{ fontSize: 11, fill: "var(--text-subtle)", fontFamily: "var(--font-mono)" }}
                                     axisLine={false}
                                     tickLine={false}
                                     allowDecimals={false}

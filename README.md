@@ -150,7 +150,27 @@ When running the Go backend, you can configure it using the following environmen
 | `DB_PATH` | `./data/iris.db` | The path to the SQLite database file. |
 | `DASHBOARD_DIR` | `./dashboard/dist` | Path to the directory containing the built frontend. |
 
-## 5. Security & Privacy
+## 5. Dashboard Analytics APIs
+
+Dashboard reporting uses `site_id`, `from`, and `to` query parameters:
+
+| Endpoint | Purpose |
+|---|---|
+| `/api/site-trends` | Current and previous-period pageviews, visitors, sessions, and percentage changes |
+| `/api/custom-events` | Custom-event totals, unique users, conversion rate, event rows, and trends |
+| `/api/custom-events/timeseries` | Daily volume for a selected `event_name` |
+| `/api/vitals/distribution` | Good, needs-improvement, and poor sample counts for LCP, INP, and CLS |
+| `/api/vitals/pages` | Per-page P75 LCP, INP, CLS, and pageview traffic |
+| `/api/vitals/score` | Overall 0–100 performance score and per-metric scores |
+
+The custom-event conversion rate is the percentage of pageview sessions that
+recorded at least one custom event in the selected period. The performance score
+maps each metric's P75 value onto a 0–100 scale: the Core Web Vitals "good"
+threshold maps to 90, the "poor" threshold maps to 50, and values at twice the
+poor threshold or worse map to 0. The overall score is the mean of the available
+LCP, INP, and CLS scores.
+
+## 6. Security & Privacy
 
 * **No Cookies:** User identity is tracked anonymously using standard `localStorage` (Visitor ID, rotated daily in UTC) and `sessionStorage` (Session ID). No third-party cookies are used.
 * **CORS:** The backend allows cross-origin browser requests by default so the SDK and hosted dashboard can talk to the API without additional setup.

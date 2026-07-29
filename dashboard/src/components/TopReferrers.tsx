@@ -20,7 +20,7 @@ export function TopReferrers({ referrers, loading }: Props) {
     return (
         <div className="card">
             <div className="card-header">
-                <span className="card-title">Top Referrers</span>
+                <span className="card-title">Referrers</span>
                 <span className="card-meta">{referrers.length} sources</span>
             </div>
             <div className="card-body">

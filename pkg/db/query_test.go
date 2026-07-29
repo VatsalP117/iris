@@ -218,6 +218,101 @@ func TestGetVitalsUsesP75(t *testing.T) {
 	}
 }
 
+func TestCustomEventsAndPerformanceAnalytics(t *testing.T) {
+	repo := newTestRepo(t)
+	base := time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC)
+
+	for _, event := range []core.Event{
+		{EventName: "$pageview", URL: "https://example.com/checkout", SessionID: "s1", VisitorID: "v1", Timestamp: base},
+		{EventName: "$pageview", URL: "https://example.com/checkout", SessionID: "s2", VisitorID: "v2", Timestamp: base},
+		{EventName: "$pageview", URL: "https://example.com/products", SessionID: "s3", VisitorID: "v3", Timestamp: base},
+		{EventName: "$pageview", URL: "https://example.com/products", SessionID: "s4", VisitorID: "v4", Timestamp: base},
+		{EventName: "checkout_completed", URL: "https://example.com/checkout", SessionID: "s1", VisitorID: "v1", Timestamp: base},
+		{EventName: "checkout_completed", URL: "https://example.com/checkout", SessionID: "s2", VisitorID: "v2", Timestamp: base.Add(24 * time.Hour)},
+		{EventName: "coupon_applied", URL: "https://example.com/checkout", SessionID: "s1", VisitorID: "v1", Timestamp: base},
+		{
+			EventName:  "$web_vital",
+			URL:        "https://example.com/checkout",
+			SessionID:  "s1",
+			VisitorID:  "v1",
+			Timestamp:  base,
+			Properties: map[string]any{"$name": "LCP", "$val": 4500.0},
+		},
+		{
+			EventName:  "$web_vital",
+			URL:        "https://example.com/checkout",
+			SessionID:  "s1",
+			VisitorID:  "v1",
+			Timestamp:  base,
+			Properties: map[string]any{"$name": "INP", "$val": 150.0},
+		},
+		{
+			EventName:  "$web_vital",
+			URL:        "https://example.com/products",
+			SessionID:  "s3",
+			VisitorID:  "v3",
+			Timestamp:  base,
+			Properties: map[string]any{"$name": "LCP", "$val": 2000.0},
+		},
+	} {
+		event.Domain = "example.com"
+		event.SiteID = "site-a"
+		insertEvent(t, repo, event)
+	}
+
+	customEvents, err := repo.GetCustomEvents(context.Background(), "site-a", "", "")
+	if err != nil {
+		t.Fatalf("GetCustomEvents returned error: %v", err)
+	}
+	if customEvents.Summary.TotalEvents != 3 || customEvents.Summary.UniqueUsers != 2 {
+		t.Fatalf("unexpected custom event summary: %+v", customEvents.Summary)
+	}
+	if customEvents.Summary.ConversionRate != 50 {
+		t.Fatalf("expected 50%% conversion rate, got %v", customEvents.Summary.ConversionRate)
+	}
+	if len(customEvents.Events) != 2 || customEvents.Events[0].EventName != "checkout_completed" {
+		t.Fatalf("unexpected custom event rows: %+v", customEvents.Events)
+	}
+
+	series, err := repo.GetCustomEventTimeSeries(context.Background(), "site-a", "checkout_completed", "", "")
+	if err != nil {
+		t.Fatalf("GetCustomEventTimeSeries returned error: %v", err)
+	}
+	if len(series) != 2 || series[0].Count != 1 || series[1].Count != 1 {
+		t.Fatalf("unexpected custom event series: %+v", series)
+	}
+
+	distributions, err := repo.GetVitalDistributions(context.Background(), "site-a", "", "")
+	if err != nil {
+		t.Fatalf("GetVitalDistributions returned error: %v", err)
+	}
+	if len(distributions) != 2 {
+		t.Fatalf("expected 2 vital distributions, got %+v", distributions)
+	}
+	if distributions[0].Name != "LCP" || distributions[0].Good != 1 || distributions[0].Poor != 1 {
+		t.Fatalf("unexpected LCP distribution: %+v", distributions[0])
+	}
+
+	pages, err := repo.GetPagePerformance(context.Background(), "site-a", "", "", 10)
+	if err != nil {
+		t.Fatalf("GetPagePerformance returned error: %v", err)
+	}
+	if len(pages) != 2 || pages[0].URL != "https://example.com/checkout" {
+		t.Fatalf("unexpected page performance order: %+v", pages)
+	}
+	if pages[0].LCP == nil || *pages[0].LCP != 4500 || pages[0].Traffic != 2 {
+		t.Fatalf("unexpected checkout performance: %+v", pages[0])
+	}
+
+	score, err := repo.GetPerformanceScore(context.Background(), "site-a", "", "")
+	if err != nil {
+		t.Fatalf("GetPerformanceScore returned error: %v", err)
+	}
+	if score.Score <= 0 || score.Score > 100 || score.SampleSize != 3 {
+		t.Fatalf("unexpected performance score: %+v", score)
+	}
+}
+
 func TestGetStatsSupportsDateTimeAndDateWindows(t *testing.T) {
 	repo := newTestRepo(t)
 
