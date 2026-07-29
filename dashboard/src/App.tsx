@@ -4,10 +4,14 @@ import { format, subDays, subHours } from "date-fns";
 import {
     api,
     DeviceStat,
+    PagePerformanceStat,
     PageStat,
+    PerformanceScore,
     ReferrerStat,
     SiteStat,
+    SiteTrendResult,
     StatsResult,
+    VitalDistribution,
     VitalStat,
 } from "./api";
 import { DashboardShell, DashboardView } from "./components/DashboardShell";
@@ -72,9 +76,13 @@ export default function App() {
     const [preset, setPreset] = useState<PresetKey>("30d");
     const [dateWindow, setDateWindow] = useState<DateWindow>(() => buildWindow("30d"));
     const [stats, setStats] = useState<StatsResult | null>(null);
+    const [siteTrend, setSiteTrend] = useState<SiteTrendResult | null>(null);
     const [pages, setPages] = useState<PageStat[]>([]);
     const [referrers, setReferrers] = useState<ReferrerStat[]>([]);
     const [vitals, setVitals] = useState<VitalStat[]>([]);
+    const [vitalDistributions, setVitalDistributions] = useState<VitalDistribution[]>([]);
+    const [pagePerformance, setPagePerformance] = useState<PagePerformanceStat[]>([]);
+    const [performanceScore, setPerformanceScore] = useState<PerformanceScore | null>(null);
     const [devices, setDevices] = useState<DeviceStat[]>([]);
     const [pageviews, setPageviews] = useState<DayBucket[]>([]);
     const [visitors, setVisitors] = useState<DayBucket[]>([]);
@@ -101,21 +109,40 @@ export default function App() {
         setLoading(true);
 
         try {
-            const [nextStats, nextPages, nextReferrers, nextVitals, nextDevices, nextPageviews, nextVisitors, nextSessions] = await Promise.all([
-                api.stats(siteId, range.queryFrom, range.queryTo, controller.signal),
+            const [
+                nextTrend,
+                nextPages,
+                nextReferrers,
+                nextVitals,
+                nextVitalDistributions,
+                nextPagePerformance,
+                nextPerformanceScore,
+                nextDevices,
+                nextPageviews,
+                nextVisitors,
+                nextSessions,
+            ] = await Promise.all([
+                api.siteTrends(siteId, range.queryFrom, range.queryTo, controller.signal),
                 api.pages(siteId, range.queryFrom, range.queryTo, controller.signal),
                 api.referrers(siteId, range.queryFrom, range.queryTo, controller.signal),
                 api.vitals(siteId, range.queryFrom, range.queryTo, controller.signal),
+                api.vitalDistributions(siteId, range.queryFrom, range.queryTo, controller.signal),
+                api.pagePerformance(siteId, range.queryFrom, range.queryTo, controller.signal),
+                api.performanceScore(siteId, range.queryFrom, range.queryTo, controller.signal),
                 api.devices(siteId, range.queryFrom, range.queryTo, controller.signal),
                 api.timeseries(siteId, range.queryFrom, range.queryTo, controller.signal),
                 api.uniqueVisitorsTimeseries(siteId, range.queryFrom, range.queryTo, controller.signal),
                 api.sessionsTimeseries(siteId, range.queryFrom, range.queryTo, controller.signal),
             ]);
 
-            setStats(nextStats);
+            setStats(nextTrend.current);
+            setSiteTrend(nextTrend);
             setPages(nextPages ?? []);
             setReferrers(nextReferrers ?? []);
             setVitals(nextVitals ?? []);
+            setVitalDistributions(nextVitalDistributions ?? []);
+            setPagePerformance(nextPagePerformance ?? []);
+            setPerformanceScore(nextPerformanceScore);
             setDevices(nextDevices ?? []);
             setPageviews(nextPageviews ?? []);
             setVisitors(nextVisitors ?? []);
@@ -140,7 +167,7 @@ export default function App() {
         let cancelled = false;
         Promise.all(
             sites.map(async (site) => {
-                const summary = await api.stats(site.site_id, dateWindow.queryFrom, dateWindow.queryTo);
+                const summary = await api.siteTrends(site.site_id, dateWindow.queryFrom, dateWindow.queryTo);
                 return [site.site_id, summary] as const;
             }),
         )
@@ -202,6 +229,7 @@ export default function App() {
             ) : selectedSite && view === "dashboard" ? (
                 <OverviewPage
                     stats={stats}
+                    siteTrend={siteTrend}
                     pages={pages}
                     referrers={referrers}
                     devices={devices}
@@ -224,7 +252,13 @@ export default function App() {
             ) : selectedSite && view === "events" ? (
                 <EventsPage site={selectedSite} dateWindow={dateWindow} />
             ) : selectedSite ? (
-                <VitalsPage vitals={vitals} pages={pages} loading={loading} />
+                <VitalsPage
+                    vitals={vitals}
+                    distributions={vitalDistributions}
+                    pages={pagePerformance}
+                    score={performanceScore}
+                    loading={loading}
+                />
             ) : null}
         </DashboardShell>
     );

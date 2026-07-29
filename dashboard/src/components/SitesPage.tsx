@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 
-import type { SiteStat, StatsResult } from "../api";
+import type { SiteStat, SiteTrendResult } from "../api";
 import { Icon } from "./Icon";
 
-export type SiteSummary = StatsResult;
+export type SiteSummary = SiteTrendResult;
 
 interface Props {
     sites: SiteStat[];
@@ -74,11 +74,21 @@ export function SitesPage({ sites, summaries, selectedSiteId, onOpenSite }: Prop
                             <div className="site-card-stats">
                                 <div>
                                     <span>Pageviews</span>
-                                    <strong>{compact(summary?.pageviews)}</strong>
+                                    <strong>{compact(summary?.current.pageviews)}</strong>
+                                    {summary && (
+                                        <small className={summary.change.pageviews >= 0 ? "up" : "down"}>
+                                            {summary.change.pageviews >= 0 ? "+" : ""}{summary.change.pageviews.toFixed(1)}%
+                                        </small>
+                                    )}
                                 </div>
                                 <div>
                                     <span>Unique visitors</span>
-                                    <strong>{compact(summary?.unique_visitors)}</strong>
+                                    <strong>{compact(summary?.current.unique_visitors)}</strong>
+                                    {summary && (
+                                        <small className={summary.change.unique_visitors >= 0 ? "up" : "down"}>
+                                            {summary.change.unique_visitors >= 0 ? "+" : ""}{summary.change.unique_visitors.toFixed(1)}%
+                                        </small>
+                                    )}
                                 </div>
                             </div>
 

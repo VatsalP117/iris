@@ -182,6 +182,315 @@ func (r *SqliteRepository) GetVitals(ctx context.Context, siteKey, from, to stri
 	return results, nil
 }
 
+func (r *SqliteRepository) GetVitalDistributions(ctx context.Context, siteKey, from, to string) ([]core.VitalDistribution, error) {
+	query := `
+	SELECT
+		json_extract(properties, '$.$name') AS name,
+		CAST(json_extract(properties, '$.$val') AS REAL) AS value
+	FROM events
+	WHERE event_name = '$web_vital'
+	  AND ` + siteMatchClause + `
+	  AND ` + fromTimeClause + `
+	  AND ` + toTimeClause + `
+	`
+	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	byName := map[string]*core.VitalDistribution{}
+	for rows.Next() {
+		var name sql.NullString
+		var value sql.NullFloat64
+		if err := rows.Scan(&name, &value); err != nil {
+			return nil, err
+		}
+		if !name.Valid || !value.Valid || vitalThresholds[name.String] == [2]float64{} {
+			continue
+		}
+
+		distribution := byName[name.String]
+		if distribution == nil {
+			distribution = &core.VitalDistribution{Name: name.String}
+			byName[name.String] = distribution
+		}
+		distribution.Total++
+		switch classifyVital(name.String, value.Float64) {
+		case "good":
+			distribution.Good++
+		case "needs-improvement":
+			distribution.NeedsImprovement++
+		case "poor":
+			distribution.Poor++
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	results := make([]core.VitalDistribution, 0, len(byName))
+	for _, name := range []string{"LCP", "INP", "CLS"} {
+		if distribution := byName[name]; distribution != nil {
+			results = append(results, *distribution)
+		}
+	}
+	return results, nil
+}
+
+func (r *SqliteRepository) GetPagePerformance(ctx context.Context, siteKey, from, to string, limit int) ([]core.PagePerformanceStat, error) {
+	vitalsQuery := `
+	SELECT
+		url,
+		json_extract(properties, '$.$name') AS name,
+		CAST(json_extract(properties, '$.$val') AS REAL) AS value
+	FROM events
+	WHERE event_name = '$web_vital'
+	  AND url != ''
+	  AND ` + siteMatchClause + `
+	  AND ` + fromTimeClause + `
+	  AND ` + toTimeClause + `
+	`
+	rows, err := r.db.QueryContext(ctx, vitalsQuery, siteKey, siteKey, from, from, to, to, to, to)
+	if err != nil {
+		return nil, err
+	}
+
+	valuesByURL := map[string]map[string][]float64{}
+	for rows.Next() {
+		var pageURL string
+		var name sql.NullString
+		var value sql.NullFloat64
+		if err := rows.Scan(&pageURL, &name, &value); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if !name.Valid || !value.Valid || vitalThresholds[name.String] == [2]float64{} {
+			continue
+		}
+		if valuesByURL[pageURL] == nil {
+			valuesByURL[pageURL] = map[string][]float64{}
+		}
+		valuesByURL[pageURL][name.String] = append(valuesByURL[pageURL][name.String], value.Float64)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+
+	trafficQuery := `
+	SELECT url, COUNT(*) AS pageviews
+	FROM events
+	WHERE event_name = '$pageview'
+	  AND ` + siteMatchClause + `
+	  AND ` + fromTimeClause + `
+	  AND ` + toTimeClause + `
+	GROUP BY url
+	`
+	trafficRows, err := r.db.QueryContext(ctx, trafficQuery, siteKey, siteKey, from, from, to, to, to, to)
+	if err != nil {
+		return nil, err
+	}
+	defer trafficRows.Close()
+
+	trafficByURL := map[string]int{}
+	for trafficRows.Next() {
+		var pageURL string
+		var pageviews int
+		if err := trafficRows.Scan(&pageURL, &pageviews); err != nil {
+			return nil, err
+		}
+		trafficByURL[pageURL] = pageviews
+	}
+	if err := trafficRows.Err(); err != nil {
+		return nil, err
+	}
+
+	results := make([]core.PagePerformanceStat, 0, len(valuesByURL))
+	for pageURL, metrics := range valuesByURL {
+		result := core.PagePerformanceStat{
+			URL:     pageURL,
+			Traffic: trafficByURL[pageURL],
+		}
+		for name, values := range metrics {
+			sort.Float64s(values)
+			value := percentile75(values)
+			switch name {
+			case "LCP":
+				result.LCP = float64Pointer(value)
+			case "INP":
+				result.INP = float64Pointer(value)
+			case "CLS":
+				result.CLS = float64Pointer(value)
+			}
+		}
+		results = append(results, result)
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		leftSeverity := pagePerformanceSeverity(results[i])
+		rightSeverity := pagePerformanceSeverity(results[j])
+		if leftSeverity != rightSeverity {
+			return leftSeverity > rightSeverity
+		}
+		if results[i].Traffic != results[j].Traffic {
+			return results[i].Traffic > results[j].Traffic
+		}
+		return results[i].URL < results[j].URL
+	})
+
+	if limit > 0 && len(results) > limit {
+		results = results[:limit]
+	}
+	return results, nil
+}
+
+func (r *SqliteRepository) GetPerformanceScore(ctx context.Context, siteKey, from, to string) (*core.PerformanceScore, error) {
+	vitals, err := r.GetVitals(ctx, siteKey, from, to)
+	if err != nil {
+		return nil, err
+	}
+	distributions, err := r.GetVitalDistributions(ctx, siteKey, from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	metricScores := map[string]int{}
+	scoreTotal := 0
+	for _, vital := range vitals {
+		if vitalThresholds[vital.Name] == [2]float64{} {
+			continue
+		}
+		score := vitalMetricScore(vital.Name, vital.Value)
+		metricScores[vital.Name] = score
+		scoreTotal += score
+	}
+
+	sampleSize := 0
+	for _, distribution := range distributions {
+		sampleSize += distribution.Total
+	}
+
+	overall := 0
+	if len(metricScores) > 0 {
+		overall = int(math.Round(float64(scoreTotal) / float64(len(metricScores))))
+	}
+	return &core.PerformanceScore{
+		Score:        overall,
+		Rating:       scoreRating(overall, len(metricScores) > 0),
+		MetricScores: metricScores,
+		SampleSize:   sampleSize,
+	}, nil
+}
+
+func (r *SqliteRepository) GetCustomEvents(ctx context.Context, siteKey, from, to string) (*core.CustomEventsResult, error) {
+	summaryQuery := `
+	SELECT
+		COUNT(*) AS total_events,
+		COUNT(DISTINCT NULLIF(visitor_id, '')) AS unique_users,
+		COUNT(DISTINCT NULLIF(session_id, '')) AS event_sessions
+	FROM events
+	WHERE event_name != ''
+	  AND event_name NOT LIKE '$%'
+	  AND ` + siteMatchClause + `
+	  AND ` + fromTimeClause + `
+	  AND ` + toTimeClause + `
+	`
+	var summary core.CustomEventSummary
+	var eventSessions int
+	if err := r.db.QueryRowContext(
+		ctx,
+		summaryQuery,
+		siteKey,
+		siteKey,
+		from,
+		from,
+		to,
+		to,
+		to,
+		to,
+	).Scan(&summary.TotalEvents, &summary.UniqueUsers, &eventSessions); err != nil {
+		return nil, err
+	}
+
+	stats, err := r.GetStats(ctx, siteKey, from, to)
+	if err != nil {
+		return nil, err
+	}
+	if stats.Sessions > 0 {
+		summary.ConversionRate = math.Round((float64(eventSessions)/float64(stats.Sessions))*1000) / 10
+	}
+
+	eventsQuery := `
+	SELECT
+		event_name,
+		COUNT(*) AS total_count,
+		COUNT(DISTINCT NULLIF(visitor_id, '')) AS unique_users
+	FROM events
+	WHERE event_name != ''
+	  AND event_name NOT LIKE '$%'
+	  AND ` + siteMatchClause + `
+	  AND ` + fromTimeClause + `
+	  AND ` + toTimeClause + `
+	GROUP BY event_name
+	ORDER BY total_count DESC, event_name ASC
+	`
+	rows, err := r.db.QueryContext(ctx, eventsQuery, siteKey, siteKey, from, from, to, to, to, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	events := []core.CustomEventStat{}
+	for rows.Next() {
+		var event core.CustomEventStat
+		if err := rows.Scan(&event.EventName, &event.TotalCount, &event.UniqueUsers); err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return &core.CustomEventsResult{Summary: summary, Events: events}, nil
+}
+
+func (r *SqliteRepository) GetCustomEventTimeSeries(
+	ctx context.Context,
+	siteKey, eventName, from, to string,
+) ([]core.CustomEventTimeSeriesBucket, error) {
+	query := `
+	SELECT
+		strftime('%Y-%m-%d', timestamp) AS day,
+		COUNT(*) AS count
+	FROM events
+	WHERE event_name = ?
+	  AND event_name NOT LIKE '$%'
+	  AND ` + siteMatchClause + `
+	  AND ` + fromTimeClause + `
+	  AND ` + toTimeClause + `
+	GROUP BY day
+	ORDER BY day ASC
+	`
+	rows, err := r.db.QueryContext(ctx, query, eventName, siteKey, siteKey, from, from, to, to, to, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := []core.CustomEventTimeSeriesBucket{}
+	for rows.Next() {
+		var bucket core.CustomEventTimeSeriesBucket
+		if err := rows.Scan(&bucket.Date, &bucket.Count); err != nil {
+			return nil, err
+		}
+		results = append(results, bucket)
+	}
+	return results, rows.Err()
+}
+
 func (r *SqliteRepository) GetPageviewsTimeSeries(ctx context.Context, siteKey, from, to string) ([]core.TimeSeriesBucket, error) {
 	query := `
 	SELECT
@@ -363,6 +672,83 @@ func percentile75(values []float64) float64 {
 		index = len(values) - 1
 	}
 	return values[index]
+}
+
+var vitalThresholds = map[string][2]float64{
+	"LCP": {2500, 4000},
+	"INP": {200, 500},
+	"CLS": {0.1, 0.25},
+}
+
+func classifyVital(name string, value float64) string {
+	thresholds, ok := vitalThresholds[name]
+	if !ok {
+		return ""
+	}
+	if value <= thresholds[0] {
+		return "good"
+	}
+	if value <= thresholds[1] {
+		return "needs-improvement"
+	}
+	return "poor"
+}
+
+func pagePerformanceSeverity(page core.PagePerformanceStat) int {
+	severity := 0
+	for name, value := range map[string]*float64{
+		"LCP": page.LCP,
+		"INP": page.INP,
+		"CLS": page.CLS,
+	} {
+		if value == nil {
+			continue
+		}
+		switch classifyVital(name, *value) {
+		case "poor":
+			severity += 2
+		case "needs-improvement":
+			severity++
+		}
+	}
+	return severity
+}
+
+func vitalMetricScore(name string, value float64) int {
+	thresholds, ok := vitalThresholds[name]
+	if !ok || value < 0 {
+		return 0
+	}
+
+	good := thresholds[0]
+	poor := thresholds[1]
+	var score float64
+	switch {
+	case value <= good:
+		score = 100 - 10*(value/good)
+	case value <= poor:
+		score = 90 - 40*((value-good)/(poor-good))
+	default:
+		score = 50 - 50*((value-poor)/poor)
+	}
+	return int(math.Round(math.Max(0, math.Min(100, score))))
+}
+
+func scoreRating(score int, hasData bool) string {
+	if !hasData {
+		return "unknown"
+	}
+	if score >= 90 {
+		return "good"
+	}
+	if score >= 50 {
+		return "needs-improvement"
+	}
+	return "poor"
+}
+
+func float64Pointer(value float64) *float64 {
+	return &value
 }
 
 func splitDomains(csv string) []string {

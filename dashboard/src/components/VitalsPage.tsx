@@ -1,9 +1,16 @@
-import type { PageStat, VitalStat } from "../api";
+import type {
+    PagePerformanceStat,
+    PerformanceScore,
+    VitalDistribution,
+    VitalStat,
+} from "../api";
 import { Icon } from "./Icon";
 
 interface Props {
     vitals: VitalStat[];
-    pages: PageStat[];
+    distributions: VitalDistribution[];
+    pages: PagePerformanceStat[];
+    score: PerformanceScore | null;
     loading: boolean;
 }
 
@@ -56,14 +63,29 @@ const LABELS: Record<Rating, string> = {
     unknown: "No data",
 };
 
-export function VitalsPage({ vitals, pages, loading }: Props) {
+function formatPageMetric(name: string, value: number | null): string {
+    if (value === null) return "—";
+    return displayValue(name, value);
+}
+
+function pageRating(page: PagePerformanceStat): Rating {
+    const ratings = [
+        ratingFor("LCP", page.lcp),
+        ratingFor("INP", page.inp),
+        ratingFor("CLS", page.cls),
+    ];
+    if (ratings.includes("poor")) return "poor";
+    if (ratings.includes("warning")) return "warning";
+    if (ratings.includes("good")) return "good";
+    return "unknown";
+}
+
+export function VitalsPage({ vitals, distributions, pages, score, loading }: Props) {
     const ordered = ["LCP", "INP", "CLS"].map((name) => ({
         name,
         value: vitals.find((item) => item.name === name)?.value ?? null,
     }));
-    const rated = ordered.filter((item) => item.value !== null);
-    const goodCount = rated.filter((item) => ratingFor(item.name, item.value) === "good").length;
-    const score = rated.length ? Math.round((goodCount / rated.length) * 100) : 0;
+    const hasScore = (score?.sample_size ?? 0) > 0;
 
     return (
         <div className="page-stack">
@@ -92,23 +114,29 @@ export function VitalsPage({ vitals, pages, loading }: Props) {
                         <div className="legend"><span className="good">Good</span><span className="warning">Improvement</span><span className="poor">Poor</span></div>
                     </div>
                     <div className="experience-bars">
-                        {[42, 58, 76, 94, 86, 69, 48, 35, 24, 14].map((height, index) => (
-                            <span
-                                className={index < 4 ? "good" : index < 7 ? "warning" : "poor"}
-                                key={index}
-                                style={{ height: `${height}%` }}
-                            />
-                        ))}
+                        {["LCP", "INP", "CLS"].map((name) => {
+                            const distribution = distributions.find((item) => item.name === name);
+                            const total = distribution?.total || 1;
+                            return (
+                                <div className="experience-metric" key={name}>
+                                    <div className="experience-bar-group">
+                                        <span className="good" style={{ height: `${Math.max(3, ((distribution?.good ?? 0) / total) * 100)}%` }} />
+                                        <span className="warning" style={{ height: `${Math.max(3, ((distribution?.needs_improvement ?? 0) / total) * 100)}%` }} />
+                                        <span className="poor" style={{ height: `${Math.max(3, ((distribution?.poor ?? 0) / total) * 100)}%` }} />
+                                    </div>
+                                    <strong>{name}</strong>
+                                </div>
+                            );
+                        })}
                     </div>
-                    <div className="experience-axis"><span>Fast</span><span>Slow</span></div>
                 </article>
 
                 <article className="card score-card">
                     <div className="card-header"><div><h3>Overall Score</h3><p>Performance health index</p></div></div>
-                    <div className="score-ring" style={{ "--score": score } as React.CSSProperties}>
-                        <strong>{score}</strong>
+                    <div className="score-ring" style={{ "--score": score?.score ?? 0 } as React.CSSProperties}>
+                        <strong>{score?.score ?? 0}</strong>
                     </div>
-                    <p>{rated.length ? "Based on the latest P75 measurements." : "Collect Web Vitals to calculate your score."}</p>
+                    <p>{hasScore ? `Based on ${score?.sample_size.toLocaleString()} Web Vital samples.` : "Collect Web Vitals to calculate your score."}</p>
                 </article>
             </section>
 
@@ -118,16 +146,21 @@ export function VitalsPage({ vitals, pages, loading }: Props) {
                     <button className="secondary-button"><Icon name="search" size={15} /> Filter</button>
                 </div>
                 <div className="performance-table">
-                    <div className="performance-row head">
-                        <span>Page path</span><span>Traffic</span><span>Priority</span>
+                    <div className="performance-row head performance-row-vitals">
+                        <span>Page path</span><span>LCP</span><span>INP</span><span>CLS</span><span>Traffic</span>
                     </div>
-                    {pages.slice(0, 5).map((page, index) => (
-                        <div className="performance-row" key={page.url}>
+                    {pages.slice(0, 8).map((page) => {
+                        const rating = pageRating(page);
+                        return (
+                        <div className={`performance-row performance-row-vitals ${rating}`} key={page.url}>
                             <span>{page.url.replace(/^https?:\/\/[^/]+/, "") || "/"}</span>
-                            <span>{page.pageviews.toLocaleString()}</span>
-                            <span><i className={index < 2 ? "poor" : "warning"} />{index < 2 ? "High" : "Review"}</span>
+                            <span>{formatPageMetric("LCP", page.lcp)}</span>
+                            <span>{formatPageMetric("INP", page.inp)}</span>
+                            <span>{formatPageMetric("CLS", page.cls)}</span>
+                            <span>{page.traffic.toLocaleString()}</span>
                         </div>
-                    ))}
+                        );
+                    })}
                     {!loading && pages.length === 0 && <div className="table-empty">No page traffic recorded yet.</div>}
                 </div>
             </section>

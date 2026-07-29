@@ -1,5 +1,5 @@
 import type { DateWindow } from "../App";
-import type { DeviceStat, PageStat, ReferrerStat, StatsResult } from "../api";
+import type { DeviceStat, PageStat, ReferrerStat, SiteTrendResult, StatsResult } from "../api";
 import { DeviceBreakdown } from "./DeviceBreakdown";
 import { Icon, IconName } from "./Icon";
 import { DayBucket, PageviewsChart } from "./PageviewsChart";
@@ -8,6 +8,7 @@ import { TopReferrers } from "./TopReferrers";
 
 interface Props {
     stats: StatsResult | null;
+    siteTrend: SiteTrendResult | null;
     pages: PageStat[];
     referrers: ReferrerStat[];
     devices: DeviceStat[];
@@ -22,7 +23,7 @@ interface Metric {
     label: string;
     value: string;
     helper: string;
-    tone: "positive" | "neutral";
+    tone: "positive" | "negative" | "neutral";
     icon: IconName;
 }
 
@@ -35,6 +36,7 @@ function formatMetric(value: number | undefined): string {
 
 export function OverviewPage({
     stats,
+    siteTrend,
     pages,
     referrers,
     devices,
@@ -44,26 +46,32 @@ export function OverviewPage({
     dateWindow,
     loading,
 }: Props) {
+    function trendHelper(value: number | undefined): Pick<Metric, "helper" | "tone"> {
+        if (value === undefined) return { helper: "Previous period unavailable", tone: "neutral" };
+        const prefix = value > 0 ? "+" : "";
+        return {
+            helper: `${prefix}${value.toFixed(1)}% vs previous period`,
+            tone: value > 0 ? "positive" : value < 0 ? "negative" : "neutral",
+        };
+    }
+
     const metrics: Metric[] = [
         {
             label: "Total Pageviews",
             value: formatMetric(stats?.pageviews),
-            helper: "All tracked page loads",
-            tone: "positive",
+            ...trendHelper(siteTrend?.change.pageviews),
             icon: "activity",
         },
         {
             label: "Unique Visitors",
             value: formatMetric(stats?.unique_visitors),
-            helper: "Privacy-safe identities",
-            tone: "positive",
+            ...trendHelper(siteTrend?.change.unique_visitors),
             icon: "users",
         },
         {
             label: "Sessions",
             value: formatMetric(stats?.sessions),
-            helper: "Across the selected period",
-            tone: "positive",
+            ...trendHelper(siteTrend?.change.sessions),
             icon: "trend",
         },
         {

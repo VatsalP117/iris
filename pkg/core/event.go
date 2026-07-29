@@ -25,6 +25,18 @@ type StatsResult struct {
 	Sessions       int `json:"sessions"`
 }
 
+type StatsChange struct {
+	Pageviews      float64 `json:"pageviews"`
+	UniqueVisitors float64 `json:"unique_visitors"`
+	Sessions       float64 `json:"sessions"`
+}
+
+type SiteTrendResult struct {
+	Current  StatsResult `json:"current"`
+	Previous StatsResult `json:"previous"`
+	Change   StatsChange `json:"change"`
+}
+
 type PageStat struct {
 	URL       string `json:"url"`
 	Pageviews int    `json:"pageviews"`
@@ -38,6 +50,53 @@ type ReferrerStat struct {
 type VitalStat struct {
 	Name  string  `json:"name"`
 	Value float64 `json:"value"`
+}
+
+type VitalDistribution struct {
+	Name             string `json:"name"`
+	Total            int    `json:"total"`
+	Good             int    `json:"good"`
+	NeedsImprovement int    `json:"needs_improvement"`
+	Poor             int    `json:"poor"`
+}
+
+type PagePerformanceStat struct {
+	URL     string   `json:"url"`
+	LCP     *float64 `json:"lcp"`
+	INP     *float64 `json:"inp"`
+	CLS     *float64 `json:"cls"`
+	Traffic int      `json:"traffic"`
+}
+
+type PerformanceScore struct {
+	Score        int            `json:"score"`
+	Rating       string         `json:"rating"`
+	MetricScores map[string]int `json:"metric_scores"`
+	SampleSize   int            `json:"sample_size"`
+}
+
+type CustomEventSummary struct {
+	TotalEvents    int     `json:"total_events"`
+	UniqueUsers    int     `json:"unique_users"`
+	ConversionRate float64 `json:"conversion_rate"`
+	ChangePercent  float64 `json:"change_percent"`
+}
+
+type CustomEventStat struct {
+	EventName     string  `json:"event_name"`
+	TotalCount    int     `json:"total_count"`
+	UniqueUsers   int     `json:"unique_users"`
+	ChangePercent float64 `json:"change_percent"`
+}
+
+type CustomEventsResult struct {
+	Summary CustomEventSummary `json:"summary"`
+	Events  []CustomEventStat  `json:"events"`
+}
+
+type CustomEventTimeSeriesBucket struct {
+	Date  string `json:"date"`
+	Count int    `json:"count"`
 }
 
 type DeviceStat struct {
@@ -65,6 +124,11 @@ type EventRepository interface {
 	GetTopPages(ctx context.Context, siteKey, from, to string, limit int) ([]PageStat, error)
 	GetTopReferrers(ctx context.Context, siteKey, from, to string, limit int) ([]ReferrerStat, error)
 	GetVitals(ctx context.Context, siteKey, from, to string) ([]VitalStat, error)
+	GetVitalDistributions(ctx context.Context, siteKey, from, to string) ([]VitalDistribution, error)
+	GetPagePerformance(ctx context.Context, siteKey, from, to string, limit int) ([]PagePerformanceStat, error)
+	GetPerformanceScore(ctx context.Context, siteKey, from, to string) (*PerformanceScore, error)
+	GetCustomEvents(ctx context.Context, siteKey, from, to string) (*CustomEventsResult, error)
+	GetCustomEventTimeSeries(ctx context.Context, siteKey, eventName, from, to string) ([]CustomEventTimeSeriesBucket, error)
 	GetDevices(ctx context.Context, siteKey, from, to string) ([]DeviceStat, error)
 	GetPageviewsTimeSeries(ctx context.Context, siteKey, from, to string) ([]TimeSeriesBucket, error)
 	GetUniqueVisitorsTimeSeries(ctx context.Context, siteKey, from, to string) ([]TimeSeriesBucket, error)
