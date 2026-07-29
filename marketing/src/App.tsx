@@ -11,6 +11,7 @@ import {
   X,
   ChevronRight
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 const GitHubIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -101,7 +102,7 @@ const FeatureCard = ({
   description,
   delay = 0
 }: {
-  icon: any;
+  icon: LucideIcon;
   title: string;
   description: string;
   delay?: number

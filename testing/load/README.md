@@ -44,6 +44,27 @@ The complete suite measures and checks:
 
 Reports are emitted as Markdown for people and JSON for CI or later analysis.
 
+## Continuous integration
+
+[GitHub Actions](../../.github/workflows/ci.yml) runs the oracle on every pull
+request and every push to `main`. The workflow has four independent gates:
+
+- Go tests with the race detector, vet, and backend builds;
+- JavaScript builds, lint, and comparator tests;
+- the complete quick correctness and fault suites; and
+- the Chromium browser oracle compared with the committed baseline.
+
+The browser job intentionally allows known SDK failures while generating its
+candidate report. The comparator fails CI only when a previously passing
+scenario regresses, a scenario contract changes, coverage is lost, or the
+harness itself errors. Existing failures remain visible as known failures, and
+fixes are reported as improvements.
+
+Every oracle job uploads its Markdown, JSON, logs, databases, and profiles even
+when a gate fails. GitHub retains these artifacts for 14 days. Configure the
+single `CI required` check as the required branch-protection check so job names
+and implementation details can change without updating repository settings.
+
 ## Safety and isolation
 
 `iris-lab suite` and `iris-lab faults` create their own server, database, port,

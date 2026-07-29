@@ -1,0 +1,217 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10.28.2"
+
+jobs:
+  go_checks:
+    name: Go checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests with the race detector
+        run: go test -race ./...
+
+      - name: Run vet
+        run: go vet ./...
+
+      - name: Build backend binaries
+        run: |
+          mkdir -p dist
+          go build -o dist/iris-server ./cmd/server
+          go build -o dist/iris-lab ./cmd/iris-lab
+
+  javascript_checks:
+    name: JavaScript checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test the browser report comparator
+        run: pnpm test:browser-oracle
+
+      - name: Build SDK
+        run: pnpm --filter iris-analytics build
+
+      - name: Build dashboard
+        run: pnpm --filter @iris/dashboard build
+
+      - name: Lint marketing site
+        run: pnpm --filter marketing lint
+
+      - name: Build marketing site
+        run: pnpm --filter marketing build
+
+  reliability_quick:
+    name: Reliability quick suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build isolated server and lab
+        run: |
+          mkdir -p dist
+          go build -o dist/iris-server ./cmd/server
+          go build -o dist/iris-lab ./cmd/iris-lab
+
+      - name: Run correctness and fault gates
+        run: |
+          set +e
+          dist/iris-lab suite \
+            --server-bin dist/iris-server \
+            --profiles smoke,baseline,target-500,target-1000,mixed,ramp,spike,soak \
+            --quick \
+            --run-id ci-quick-${{ github.run_id }} \
+            --output artifacts/reliability/quick \
+            --pprof=true
+          suite_status=$?
+
+          dist/iris-lab faults \
+            --server-bin dist/iris-server \
+            --quick \
+            --run-id ci-faults-${{ github.run_id }} \
+            --output artifacts/reliability/faults
+          faults_status=$?
+          set -e
+
+          if [ "$suite_status" -ne 0 ] || [ "$faults_status" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Upload reliability reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reliability-quick-${{ github.run_id }}
+          path: artifacts/reliability/
+          if-no-files-found: warn
+          retention-days: 14
+
+  browser_regression:
+    name: Browser regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run browser oracle
+        env:
+          IRIS_BROWSER_OUTPUT: artifacts/reliability/browser
+        run: pnpm lab:browser -- --allow-failures
+
+      - name: Compare with committed browser baseline
+        run: |
+          node testing/load/browser/compare.mjs \
+            testing/load/baselines/2026-07-29/browser/browser-summary.json \
+            artifacts/reliability/browser/browser-summary.json \
+            artifacts/reliability/browser
+
+      - name: Upload browser report and comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-regression-${{ github.run_id }}
+          path: artifacts/reliability/browser/
+          if-no-files-found: warn
+          retention-days: 14
+
+  ci_required:
+    name: CI required
+    if: always()
+    needs:
+      - go_checks
+      - javascript_checks
+      - reliability_quick
+      - browser_regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every CI gate
+        env:
+          GO_RESULT: ${{ needs.go_checks.result }}
+          JAVASCRIPT_RESULT: ${{ needs.javascript_checks.result }}
+          RELIABILITY_RESULT: ${{ needs.reliability_quick.result }}
+          BROWSER_RESULT: ${{ needs.browser_regression.result }}
+        run: |
+          for result in \
+            "$GO_RESULT" \
+            "$JAVASCRIPT_RESULT" \
+            "$RELIABILITY_RESULT" \
+            "$BROWSER_RESULT"
+          do
+            if [ "$result" != "success" ]; then
+              echo "A required CI job finished with result: $result"
+              exit 1
+            fi
+          done
