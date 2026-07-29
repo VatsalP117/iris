@@ -181,10 +181,12 @@ The Reliability Lab is implemented. Its Go orchestrator now:
 - writes JSON, CSV, profile, log, and Markdown artifacts.
 
 The lab also includes independent k6 traffic scripts and a real-browser SDK
-oracle for lifecycle, navigation, beacon, storage, offline, multi-tab, and
-batching behavior. Full-duration reference reports are preserved under
-`testing/load/baselines/`; commands and interpretation guidance live in
-`testing/load/README.md`.
+oracle. The browser layer now combines deterministic generated state-machine
+traces, retry and connection chaos, real React Router fixture applications, and
+actual Chromium lifecycle behavior including BFCache, freeze/resume, storage,
+offline, multi-tab, page close, and early navigation. Full-duration reference
+reports are preserved under `testing/load/baselines/`; commands and
+interpretation guidance live in `testing/load/README.md`.
 
 ## Phase 2: Operational confidence
 

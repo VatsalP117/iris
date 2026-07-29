@@ -47,9 +47,29 @@ Detailed human and machine reports are in
 
 ## Browser SDK baseline
 
-The real-browser oracle passed 7 of 15 scenarios. It exposed same-URL
-double-counting, missing `replaceState` tracking, double-counting from multiple
-instances, no fallback when `sendBeacon` refuses a payload, no retry after a
-transient 503 or offline period, inconsistent visitor identity across tabs, and
-loss under a 1,000-event burst. These are product defects for the trust-release
-roadmap, not oracle failures. See [`browser/browser-report.md`](./browser/browser-report.md).
+The expanded real-browser oracle passed 19 of 35 scenarios:
+
+| Category | Passed | Failed |
+|---|---:|---:|
+| SDK flows | 7 | 7 |
+| Delivery chaos | 6 | 5 |
+| Generated state machine | 0 | 1 |
+| Framework fixtures | 1 | 1 |
+| Browser lifecycle | 5 | 2 |
+
+The deterministic state machine ran 16 traces and found exact event/URL
+divergence in 12 of them. The new scenarios also exposed:
+
+- retry loss after 429, 502, and 504 responses;
+- a double count when the server accepted an event but the response connection
+  disappeared—Chromium made two request attempts and both were stored;
+- missing replacement/redirect attribution in a real React Router data-router
+  application;
+- no pageview when an actual BFCache restore returned to the page, even though
+  both persisted lifecycle events confirmed BFCache was exercised; and
+- duplicated tabs retaining the same session ID.
+
+The previous same-URL, multiple-instance, beacon fallback, transient 503,
+offline, identity, and burst-loss findings remain. These are product defects for
+the trust-release roadmap, not oracle failures. See
+[`browser/browser-report.md`](./browser/browser-report.md).

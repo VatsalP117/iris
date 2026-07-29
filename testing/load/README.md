@@ -82,6 +82,33 @@ pnpm lab:browser -- --allow-failures
 Browser artifacts default to `artifacts/reliability/browser-<timestamp>/`.
 Set `IRIS_BROWSER_OUTPUT` to choose a stable directory.
 
+### Browser oracle layers
+
+The Chromium oracle currently runs 35 scenarios in five groups:
+
+- **SDK flows:** initialization, repeated starts, direct history navigation,
+  multiple instances, storage failure, identity, batching, and high-volume
+  enqueue behavior.
+- **Generated state machine:** 16 deterministic lifecycle traces generated from
+  `start`, `stop`, manual tracking, unique and same-URL `pushState`,
+  `replaceState`, and hash actions. The independent model compares the exact
+  ordered event names and URLs, not only totals. Failures include the seed and
+  replayable action trace.
+- **Delivery chaos:** offline recovery, 408/429/502/503/504 responses, permanent
+  400 rejection, accepted requests whose response connection disappears,
+  hanging and slow connections, beacon refusal, and allowed or rejected CORS
+  preflights.
+- **Framework fixtures:** real React Router declarative and data-router
+  applications exercise links, programmatic navigation, replacement, and
+  redirect behavior.
+- **Lifecycle:** an actual Chromium BFCache round trip, pagehide/pageshow,
+  Chrome freeze/resume, hidden-page batch flushing, duplicated tabs, navigation
+  before SDK loading, and abrupt page close.
+
+Playwright normally disables Chromium BFCache. The oracle deliberately removes
+that launch flag and verifies `PageTransitionEvent.persisted` in both directions
+before treating the BFCache assertion as exercised.
+
 ## Full profile suite
 
 Run all standard profiles:
