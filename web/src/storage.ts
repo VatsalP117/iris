@@ -1,12 +1,14 @@
 const VID_KEY = "iris_vid";
 const VID_DAY_KEY = "iris_vid_day";
+const VID_LOCK_NAME = "iris_visitor_id";
 const SID_KEY = "iris_sid";
 
 let memoryVID = "";
 let memoryVIDDay = "";
 let memorySID = "";
+let sessionInitialized = false;
 
-function generateId(): string {
+export function generateId(): string {
     if (typeof crypto !== "undefined" && crypto.randomUUID) {
         return crypto.randomUUID();
     }
@@ -25,7 +27,7 @@ function currentUTCDateKey(): string {
  * Returns an anonymous visitor ID that rotates once per UTC day.
  * Stays stable for a given browser/profile within the same UTC day.
  */
-export function getVisitorId(): string {
+function readVisitorId(): string {
     const today = currentUTCDateKey();
 
     try {
@@ -47,6 +49,29 @@ export function getVisitorId(): string {
     }
 }
 
+export interface VisitorIdentity {
+    current: string;
+    ready: Promise<string>;
+}
+
+export function getVisitorIdentity(): VisitorIdentity {
+    const identity: VisitorIdentity = {
+        current: readVisitorId(),
+        ready: Promise.resolve(""),
+    };
+    const coordinatedId =
+        typeof navigator !== "undefined" && navigator.locks
+            ? navigator.locks.request(VID_LOCK_NAME, readVisitorId)
+            : Promise.resolve(identity.current);
+    identity.ready = coordinatedId
+        .then((vid) => {
+            identity.current = vid;
+            return vid;
+        })
+        .catch(() => identity.current);
+    return identity;
+}
+
 /**
  * Returns a session-scoped ID stored in sessionStorage.
  * Generates a new ID per browser tab / session (cleared when tab closes).
@@ -54,15 +79,21 @@ export function getVisitorId(): string {
 export function getSessionId(): string {
     try {
         let sid = sessionStorage.getItem(SID_KEY);
+        if (!sessionInitialized && window.opener && sid) {
+            sid = generateId();
+            sessionStorage.setItem(SID_KEY, sid);
+        }
         if (!sid) {
             sid = generateId();
             sessionStorage.setItem(SID_KEY, sid);
         }
+        sessionInitialized = true;
         return sid;
     } catch {
         if (!memorySID) {
             memorySID = generateId();
         }
+        sessionInitialized = true;
         return memorySID;
     }
 }

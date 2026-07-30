@@ -7,6 +7,11 @@ const BATCH_DEFAULTS = {
   flushOnLeave: true,
 } as const;
 
+const MAX_DELIVERY_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 100;
+const STALLED_REQUEST_MS = 450;
+const RETRYABLE_STATUS_CODES = new Set([408, 429, 502, 503, 504]);
+
 export class Transport {
   private queue: EventPayload[] = [];
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -38,7 +43,7 @@ export class Transport {
     }
   }
 
-  flush() {
+  flush(useBeacon = false) {
     if (this.queue.length === 0) return;
 
     const events = this.queue.splice(0);
@@ -47,18 +52,14 @@ export class Transport {
 
     if (this.config.debug) console.log(`Iris: Flushing ${events.length} events`);
 
-    if (navigator.sendBeacon) {
+    if (useBeacon && navigator.sendBeacon) {
       const blob = new Blob([body], { type: API_REQUEST_CONSTANTS.CONTENT_TYPES.JSON });
-      navigator.sendBeacon(url, blob);
+      const queued = navigator.sendBeacon(url, blob);
+      if (!queued) {
+        void this.sendWithFetch(url, body, "Iris: Batch flush failed", true);
+      }
     } else {
-      fetch(url, {
-        method: API_REQUEST_CONSTANTS.METHODS.POST,
-        body,
-        keepalive: true,
-        headers: { [API_REQUEST_CONSTANTS.HEADERS.CONTENT_TYPE]: API_REQUEST_CONSTANTS.CONTENT_TYPES.JSON },
-      }).catch((err) => {
-        if (this.config.debug) console.error("Iris: Batch flush failed", err);
-      });
+      void this.sendWithFetch(url, body, "Iris: Batch flush failed", useBeacon);
     }
   }
 
@@ -82,21 +83,45 @@ export class Transport {
     const url = `${this.config.host}/${API_ENDPOINTS.SINGLE_EVENT}`;
     const body = JSON.stringify(payload);
 
-    if (navigator.sendBeacon) {
-      const blob = new Blob([body], { type: API_REQUEST_CONSTANTS.CONTENT_TYPES.JSON });
-      navigator.sendBeacon(url, blob);
-    } else {
-      fetch(url, {
-        method: API_REQUEST_CONSTANTS.METHODS.POST,
-        body,
-        keepalive: true,
-        headers: { [API_REQUEST_CONSTANTS.HEADERS.CONTENT_TYPE]: API_REQUEST_CONSTANTS.CONTENT_TYPES.JSON },
-      }).catch((err) => {
-        if (this.config.debug) console.error("Iris: Failed to send", err);
-      });
-    }
+    void this.sendWithFetch(url, body, "Iris: Failed to send", false);
 
     if (this.config.debug) console.log("Iris: Event Sent", payload);
+  }
+
+  private async sendWithFetch(
+    url: string,
+    body: string,
+    errorMessage: string,
+    keepalive: boolean,
+  ) {
+    for (let attempt = 1; attempt <= MAX_DELIVERY_ATTEMPTS; attempt++) {
+      const requestStartedAt = performance.now();
+      try {
+        const response = await fetch(url, {
+          method: API_REQUEST_CONSTANTS.METHODS.POST,
+          body,
+          keepalive,
+          headers: { [API_REQUEST_CONSTANTS.HEADERS.CONTENT_TYPE]: API_REQUEST_CONSTANTS.CONTENT_TYPES.JSON },
+        });
+        if (
+          !RETRYABLE_STATUS_CODES.has(response.status) ||
+          attempt === MAX_DELIVERY_ATTEMPTS
+        ) {
+          return;
+        }
+      } catch (err) {
+        const requestDuration = performance.now() - requestStartedAt;
+        const requestWasStalled = requestDuration >= STALLED_REQUEST_MS;
+        if (
+          attempt === MAX_DELIVERY_ATTEMPTS ||
+          (navigator.onLine && !requestWasStalled)
+        ) {
+          if (this.config.debug) console.error(errorMessage, err);
+          return;
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+    }
   }
 
   private startTimer() {
@@ -106,11 +131,11 @@ export class Transport {
 
   private handleVisibilityChange() {
     if (document.visibilityState === "hidden") {
-      this.flush();
+      this.flush(true);
     }
   }
 
   private handlePageHide() {
-    this.flush();
+    this.flush(true);
   }
 }

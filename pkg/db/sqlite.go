@@ -81,7 +81,7 @@ func (r *SqliteRepository) Insert(ctx context.Context, e *core.Event) error {
 	}
 
 	query := `
-	INSERT INTO events (id, event_name, url, domain, referrer, screen_width, site_id, session_id, visitor_id, properties, timestamp)
+	INSERT OR IGNORE INTO events (id, event_name, url, domain, referrer, screen_width, site_id, session_id, visitor_id, properties, timestamp)
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
@@ -114,7 +114,7 @@ func (r *SqliteRepository) InsertBatch(ctx context.Context, events []*core.Event
 	defer tx.Rollback()
 
 	stmt, err := tx.PrepareContext(ctx, `
-	INSERT INTO events (id, event_name, url, domain, referrer, screen_width, site_id, session_id, visitor_id, properties, timestamp)
+	INSERT OR IGNORE INTO events (id, event_name, url, domain, referrer, screen_width, site_id, session_id, visitor_id, properties, timestamp)
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
