@@ -1,8 +1,10 @@
-import { onCLS, onINP, onLCP, Metric } from "web-vitals";
+import type { Metric } from "web-vitals";
 
 type TrackFn = (name: string, props: object) => void;
 
-export function initVitals(trackFn: TrackFn) {
+export async function initVitals(trackFn: TrackFn) {
+  const { onCLS, onINP, onLCP } = await import("web-vitals");
+
   const handleMetric = (metric: Metric) => {
     trackFn("$web_vital", {
       $id: metric.id,

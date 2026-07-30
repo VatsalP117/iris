@@ -11,6 +11,7 @@ export class Iris {
   private transport: Transport;
   private config: IrisConfig;
   private isStarted = false;
+  private vitalsRunId = 0;
   private originalPushState: typeof history.pushState | null = null;
   private autocaptureCleanup: (() => void) | null = null;
 
@@ -26,6 +27,7 @@ export class Iris {
   public start() {
     if (this.isStarted) return;
     this.isStarted = true;
+    const vitalsRunId = ++this.vitalsRunId;
 
     const ac = this.config.autocapture as AutocaptureConfig | false | undefined;
 
@@ -37,7 +39,15 @@ export class Iris {
       this.autocaptureCleanup = initAutoCapture(this.track.bind(this));
     }
     if (ac && ac.webvitals === true) {
-      initVitals(this.track.bind(this));
+      void initVitals((name, props) => {
+        if (this.isStarted && this.vitalsRunId === vitalsRunId) {
+          this.track(name, props);
+        }
+      }).catch((err) => {
+        if (this.config.debug) {
+          console.error("Iris: Failed to initialize Web Vitals", err);
+        }
+      });
     }
   }
 
@@ -79,6 +89,7 @@ export class Iris {
   public stop() {
     if (!this.isStarted) return;
     this.isStarted = false;
+    this.vitalsRunId++;
 
     this.transport.destroy();
 
