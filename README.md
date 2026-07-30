@@ -2,6 +2,10 @@
 
 A dead-simple, privacy-friendly, self-hosted web analytics platform with a Next.js/Vite compatible npm client and a super-fast Go + SQLite backend.
 
+## Project handbook
+
+For the evidence-based architecture, API, data, security, operations, ADR, testing, and learning guide, start with [`docs/PROJECT_HANDBOOK.md`](docs/PROJECT_HANDBOOK.md).
+
 ## Architecture
 
 * **Frontend Dashboard:** React 18 + Vite (Tailwind/Plain CSS)
