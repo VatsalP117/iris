@@ -43,11 +43,9 @@ tasks:
     deps: [build:backend, build:js]
 
   publish:js:
-    desc: Build and publish the npm package
-    dir: web
+    desc: Manually build and publish the npm package
     cmds:
-      - pnpm build
-      - npm publish
+      - pnpm release:sdk
 
   lab:build:
     desc: Build the Iris Reliability Lab CLI
