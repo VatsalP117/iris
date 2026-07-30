@@ -57,14 +57,10 @@ The backend image is now isolated from monorepo-only changes via:
 
 ## 2. Using the Client SDK (Your Website)
 
-First, add the Iris client package to your project. Currently, this package sits inside this monorepo in the `/web` folder. 
-
-Publish it to npm:
-```bash
-cd web
-npm run build
-npm publish --access public
-```
+The client package is published from the `/web` workspace. Maintainers should
+use the Changesets and GitHub Actions release flow documented in
+[`docs/RELEASING.md`](docs/RELEASING.md); do not publish directly from a
+developer machine.
 
 ### Installation
 
