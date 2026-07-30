@@ -6,6 +6,8 @@ A dead-simple, privacy-friendly, self-hosted web analytics platform with a Next.
 
 For the evidence-based architecture, API, data, security, operations, ADR, testing, and learning guide, start with [`docs/PROJECT_HANDBOOK.md`](docs/PROJECT_HANDBOOK.md).
 
+For npm versioning and publishing, see [`docs/RELEASING.md`](docs/RELEASING.md).
+
 ## Architecture
 
 * **Frontend Dashboard:** React 18 + Vite (Tailwind/Plain CSS)

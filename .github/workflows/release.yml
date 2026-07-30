@@ -1,0 +1,143 @@
+name: Release SDK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-sdk
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "24"
+  NPM_VERSION: "11.19.0"
+  PNPM_VERSION: "10.28.2"
+
+jobs:
+  release_plan:
+    name: Plan SDK release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      package_name: ${{ steps.registry.outputs.package_name }}
+      package_version: ${{ steps.registry.outputs.package_version }}
+      should_publish: ${{ steps.registry.outputs.should_publish }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check npm registry
+        id: registry
+        shell: bash
+        run: |
+          package_name="$(node -p "require('./web/package.json').name")"
+          package_version="$(node -p "require('./web/package.json').version")"
+
+          echo "package_name=$package_name" >> "$GITHUB_OUTPUT"
+          echo "package_version=$package_version" >> "$GITHUB_OUTPUT"
+
+          set +e
+          registry_output="$(npm view "$package_name@$package_version" version 2>&1)"
+          registry_status=$?
+          set -e
+
+          if [ "$registry_status" -eq 0 ]; then
+            echo "$package_name@$package_version is already published."
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+          elif grep -q "E404" <<< "$registry_output"; then
+            echo "$package_name@$package_version is ready to publish."
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "$registry_output" >&2
+            exit "$registry_status"
+          fi
+
+      - name: Create or update version pull request
+        uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1.8.0
+        with:
+          version: pnpm version-packages
+          title: "chore: release packages"
+          commit: "chore: release packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    name: Publish SDK
+    needs: release_plan
+    if: needs.release_plan.outputs.should_publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+    environment:
+      name: npm-production
+      url: https://www.npmjs.com/package/iris-analytics
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+          registry-url: https://registry.npmjs.org
+
+      - name: Install trusted-publishing npm version
+        run: npm install --global "npm@${NPM_VERSION}"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build SDK
+        run: pnpm --filter iris-analytics build
+
+      - name: Inspect package contents
+        working-directory: web
+        run: npm pack --dry-run
+
+      - name: Publish to npm
+        working-directory: web
+        run: npm publish --access public
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACKAGE_NAME: ${{ needs.release_plan.outputs.package_name }}
+          PACKAGE_VERSION: ${{ needs.release_plan.outputs.package_version }}
+        run: |
+          release_tag="$PACKAGE_NAME@$PACKAGE_VERSION"
+          gh release create "$release_tag" \
+            --target "$GITHUB_SHA" \
+            --title "$release_tag" \
+            --generate-notes
