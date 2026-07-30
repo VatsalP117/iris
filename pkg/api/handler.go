@@ -56,7 +56,9 @@ func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	event.ID = uuid.NewString()
+	if event.ID == "" {
+		event.ID = uuid.NewString()
+	}
 	event.Timestamp = time.Now().UTC()
 
 	if event.Properties != nil {
@@ -97,7 +99,9 @@ func (h *Handler) TrackBatchEvents(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	ptrs := make([]*core.Event, len(events))
 	for i := range events {
-		events[i].ID = uuid.NewString()
+		if events[i].ID == "" {
+			events[i].ID = uuid.NewString()
+		}
 		events[i].Timestamp = now
 		if events[i].Properties != nil {
 			events[i].Properties = truncateStrings(events[i].Properties, 200).(map[string]any)

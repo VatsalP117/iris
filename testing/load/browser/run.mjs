@@ -64,6 +64,7 @@ const frameworkHTML = (bundle) => `<!doctype html>
 
 const state = {
     events: [],
+    eventIds: new Set(),
     bytes: 0,
     failPosts: 0,
     delayMS: 0,
@@ -236,7 +237,14 @@ const server = http.createServer(async (request, response) => {
             const decoded = JSON.parse(body.toString("utf8"));
             const decodedEvents = Array.isArray(decoded) ? decoded : [decoded];
             requestRecord.eventCount = decodedEvents.length;
-            state.events.push(...decodedEvents);
+            for (const event of decodedEvents) {
+                if (!event.id || !state.eventIds.has(event.id)) {
+                    state.events.push(event);
+                    if (event.id) {
+                        state.eventIds.add(event.id);
+                    }
+                }
+            }
             requestRecord.status = 202;
             if (behavior === "accept-close") {
                 request.socket.destroy();
@@ -1260,6 +1268,7 @@ async function startIris(page) {
 
 function resetState() {
     state.events = [];
+    state.eventIds = new Set();
     state.bytes = 0;
     state.failPosts = 0;
     state.delayMS = 0;

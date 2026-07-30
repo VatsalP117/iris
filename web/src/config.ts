@@ -22,6 +22,7 @@ export interface IrisConfig {
 }
 
 export type EventPayload = {
+  id: string;   // idempotency key
   n: string;    // event name
   u: string;    // URL
   d: string;    // domain

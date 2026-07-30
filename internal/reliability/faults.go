@@ -238,21 +238,26 @@ func runSQLiteDiskLimitFault(
 	config FaultSuiteConfig,
 	server *LabServer,
 ) FaultResult {
-	loadConfig := faultLoadConfig(config, server, "sqlite-disk-limit")
-	if err := server.Stop(); err != nil {
+	workDir := filepath.Join(config.OutputDir, "sqlite-disk-limit-server")
+	diskServer := &LabServer{
+		Binary:  server.Binary,
+		WorkDir: workDir,
+		DBPath:  filepath.Join(workDir, "iris.db"),
+		LogPath: filepath.Join(config.OutputDir, "sqlite-disk-limit-server.log"),
+		Env:     []string{"IRIS_LAB_DB_EXTRA_PAGES=2"},
+	}
+	if err := diskServer.Start(ctx); err != nil {
 		return FaultResult{Name: "sqlite-disk-limit", Error: err.Error()}
 	}
-	server.Env = []string{"IRIS_LAB_DB_EXTRA_PAGES=2"}
-	if err := server.Start(ctx); err != nil {
-		server.Env = nil
-		return FaultResult{Name: "sqlite-disk-limit", Error: err.Error()}
-	}
+	defer diskServer.Stop()
+
+	loadConfig := faultLoadConfig(config, diskServer, "sqlite-disk-limit")
 	report, err := Run(ctx, loadConfig)
-	stopErr := server.Stop()
-	server.Env = nil
-	restartErr := server.Start(ctx)
+	stopErr := diskServer.Stop()
+	diskServer.Env = nil
+	restartErr := diskServer.Start(ctx)
 	recoveryErr := errors.Join(stopErr, restartErr)
-	recovered := recoveryErr == nil && serverHealthy(ctx, server.URL())
+	recovered := recoveryErr == nil && serverHealthy(ctx, diskServer.URL())
 	result := finalizeFaultResult(config.OutputDir, "sqlite-disk-limit", report, err, recovered, recoveryErr)
 	if result.Passed && result.RejectedEvents == 0 && result.RequestErrors == 0 {
 		result.Passed = false
