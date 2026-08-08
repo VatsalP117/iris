@@ -2,3 +2,4 @@ packages:
   - "web"
   - "dashboard"
   - "marketing"
+  - "launch-video"

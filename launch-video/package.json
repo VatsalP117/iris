@@ -1,0 +1,42 @@
+{
+  "name": "launch-video",
+  "version": "1.0.0",
+  "description": "Iris v1.0.0 launch film",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VatsalP117/iris.git"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@remotion/cli": "4.0.507",
+    "@remotion/google-fonts": "4.0.507",
+    "@remotion/media": "4.0.507",
+    "@remotion/transitions": "4.0.507",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.507",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@remotion/eslint-config-flat": "4.0.507",
+    "@types/react": "18.3.28",
+    "@types/web": "0.0.166",
+    "eslint": "9.19.0",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "dev": "remotion studio --no-open",
+    "build": "remotion bundle",
+    "capture": "node scripts/capture-dashboard.mjs",
+    "record": "node scripts/record-dashboard.mjs",
+    "score": "node scripts/generate-fast-score.mjs && ffmpeg -hide_banner -loglevel error -y -i public/audio/iris-score-fast-raw.wav -af loudnorm=I=-16:TP=-1.5:LRA=5 -codec:a libmp3lame -b:a 320k public/audio/iris-score-fast.mp3 && rm public/audio/iris-score-fast-raw.wav",
+    "render": "remotion render IrisLaunch out/iris-v1-launch.mp4 --codec=h264 --crf=16 --audio-codec=aac",
+    "upgrade": "remotion upgrade",
+    "lint": "eslint src && tsc"
+  },
+  "sideEffects": [
+    "*.css"
+  ]
+}
