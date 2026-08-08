@@ -5,6 +5,7 @@ import type {
     VitalStat,
 } from "../api";
 import { Icon } from "./Icon";
+import { EmptyState } from "./EmptyState";
 
 interface Props {
     vitals: VitalStat[];
@@ -86,6 +87,32 @@ export function VitalsPage({ vitals, distributions, pages, score, loading }: Pro
         value: vitals.find((item) => item.name === name)?.value ?? null,
     }));
     const hasScore = (score?.sample_size ?? 0) > 0;
+    const hasVitalData = hasScore || ordered.some((item) => item.value !== null) || pages.length > 0;
+
+    if (!loading && !hasVitalData) {
+        return (
+            <div className="page-stack">
+                <section className="page-heading">
+                    <div>
+                        <span className="eyebrow">Performance</span>
+                        <h2>Real-user vitals</h2>
+                        <p>Measure how your pages feel where it matters: on real devices.</p>
+                    </div>
+                </section>
+                <EmptyState
+                    eyebrow="No samples yet"
+                    title="Performance needs a first signal."
+                    description="Enable Web Vitals collection and Iris will turn field measurements into an honest view of speed, responsiveness, and stability."
+                    code="autocapture: { pageviews: true, webvitals: true }"
+                    steps={[
+                        { title: "Enable", description: "Turn on Web Vitals in your client config." },
+                        { title: "Collect", description: "Let real visits create field samples." },
+                        { title: "Improve", description: "Prioritize the pages with the clearest impact." },
+                    ]}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="page-stack">

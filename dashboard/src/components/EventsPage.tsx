@@ -18,6 +18,7 @@ import {
     SiteStat,
 } from "../api";
 import { Icon } from "./Icon";
+import { EmptyState } from "./EmptyState";
 
 interface Props {
     site: SiteStat;
@@ -83,8 +84,8 @@ export function EventsPage({ site, dateWindow }: Props) {
         return (result?.events ?? []).filter((event) => event.event_name.toLowerCase().includes(normalized));
     }, [query, result]);
 
-    const installCommand = "npm install @iris-analytics/sdk";
-    const snippet = `import Iris from "@iris-analytics/sdk";
+    const installCommand = "npm install iris-analytics";
+    const snippet = `import Iris from "iris-analytics";
 
 const iris = new Iris({
     siteId: "${site.site_id}",
@@ -146,7 +147,9 @@ iris.track("user_signup_completed", {
                         <strong>{selectedStat?.total_count.toLocaleString() ?? "—"}</strong>
                     </div>
                 </div>
-                {hasEvents ? (
+                {loading ? (
+                    <div className="events-empty-chart"><span className="spinner" /></div>
+                ) : hasEvents ? (
                     <div className="event-chart">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={series} margin={{ top: 12, right: 12, left: -24, bottom: 0 }}>
@@ -187,12 +190,18 @@ iris.track("user_signup_completed", {
                         </ResponsiveContainer>
                     </div>
                 ) : (
-                    <div className="events-empty-chart">
-                        <div className="chart-grid-lines" />
-                        <Icon name="activity" size={28} />
-                        <strong>No custom event activity yet</strong>
-                        <p>Tracked events will appear here as soon as the SDK sends an event name that does not start with <code>$</code>.</p>
-                    </div>
+                    <EmptyState
+                        compact
+                        eyebrow="Awaiting a signal"
+                        title="Your first event becomes a story."
+                        description="Name the product moment you care about. Iris will chart it here without building a profile of the person behind it."
+                        code={'iris.track("signup_completed");'}
+                        steps={[
+                            { title: "Name it", description: "Choose one meaningful product action." },
+                            { title: "Track it", description: "Send a small, anonymous event." },
+                            { title: "Learn", description: "See its trend and conversion signal." },
+                        ]}
+                    />
                 )}
             </section>
 

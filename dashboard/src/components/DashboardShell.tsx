@@ -21,7 +21,7 @@ interface Props {
 }
 
 const NAV_ITEMS: { view: DashboardView; label: string; icon: IconName }[] = [
-    { view: "dashboard", label: "Dashboard", icon: "dashboard" },
+    { view: "dashboard", label: "Overview", icon: "dashboard" },
     { view: "sites", label: "Sites", icon: "globe" },
     { view: "events", label: "Custom Events", icon: "calendar" },
     { view: "vitals", label: "Web Vitals", icon: "speed" },
@@ -52,24 +52,22 @@ export function DashboardShell({
             <aside className={`sidebar ${mobileNavigationOpen ? "is-open" : ""}`}>
                 <div className="brand">
                     <div className="brand-mark">
-                        <span />
-                        <span />
-                        <span />
-                        <span />
+                        {Array.from({ length: 6 }, (_, index) => <span key={index} />)}
                     </div>
                     <div>
-                        <strong>Iris Analytics</strong>
-                        <small>Self-hosted</small>
+                        <strong>Iris</strong>
+                        <small>Self-hosted analytics</small>
                     </div>
                 </div>
 
                 <nav className="sidebar-nav" aria-label="Primary navigation">
-                    {NAV_ITEMS.map((item) => (
+                    {NAV_ITEMS.map((item, index) => (
                         <button
                             className={view === item.view ? "active" : ""}
                             key={item.view}
                             onClick={() => navigate(item.view)}
                         >
+                            <b>{String(index + 1).padStart(2, "0")}</b>
                             <Icon name={item.icon} size={18} />
                             <span>{item.label}</span>
                         </button>
@@ -109,7 +107,10 @@ export function DashboardShell({
                         >
                             <Icon name="menu" />
                         </button>
-                        <h1>{title}</h1>
+                        <div>
+                            <span className="app-bar-eyebrow">Analytics workspace</span>
+                            <h1>{title}.</h1>
+                        </div>
                     </div>
 
                     <div className="app-bar-actions">
@@ -128,7 +129,7 @@ export function DashboardShell({
                             </label>
                         )}
 
-                        {view !== "sites" && (
+                        {view !== "sites" && sites.length > 0 && (
                             <label className="select-shell period-select">
                                 <span className="sr-only">Date range</span>
                                 <Icon name="calendar" size={15} />

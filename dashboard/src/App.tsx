@@ -15,6 +15,7 @@ import {
     VitalStat,
 } from "./api";
 import { DashboardShell, DashboardView } from "./components/DashboardShell";
+import { EmptyState } from "./components/EmptyState";
 import { EventsPage } from "./components/EventsPage";
 import { OverviewPage } from "./components/OverviewPage";
 import { SitesPage, SiteSummary } from "./components/SitesPage";
@@ -221,11 +222,17 @@ export default function App() {
                     <strong>Loading your sites</strong>
                 </div>
             ) : !hasSites ? (
-                <div className="page-state page-state-empty">
-                    <div className="empty-logo">Ir</div>
-                    <strong>No analytics data yet</strong>
-                    <p>Install the Iris SDK on your site to start collecting privacy-friendly analytics.</p>
-                </div>
+                <EmptyState
+                    eyebrow="Start here"
+                    title="Your analytics start here."
+                    description="Connect one site and Iris will turn its first anonymous signal into a calm, useful workspace. No cookies, no personal profiles, no noise."
+                    code="npm install iris-analytics"
+                    steps={[
+                        { title: "Install", description: "Add the tiny Iris SDK to your site." },
+                        { title: "Connect", description: "Point it at your self-hosted endpoint." },
+                        { title: "Observe", description: "Watch the first privacy-safe signal arrive." },
+                    ]}
+                />
             ) : selectedSite && view === "dashboard" ? (
                 <OverviewPage
                     stats={stats}

@@ -29,9 +29,9 @@ interface Props {
 export type MetricKey = "uniqueVisitors" | "pageviews" | "sessions";
 
 const METRICS: { key: MetricKey; label: string; color: string }[] = [
-    { key: "uniqueVisitors", label: "Visitors", color: "#4f46e5" },
-    { key: "pageviews", label: "Pageviews", color: "#3525cd" },
-    { key: "sessions", label: "Sessions", color: "#087a52" },
+    { key: "uniqueVisitors", label: "Visitors", color: "#6558ef" },
+    { key: "pageviews", label: "Pageviews", color: "#3328a8" },
+    { key: "sessions", label: "Sessions", color: "#2f8a59" },
 ];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -169,16 +169,16 @@ export function PageviewsChart({ pageviewsData, visitorsData, sessionsData, load
                             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="gradUV" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.16} />
-                                        <stop offset="100%" stopColor="#4f46e5" stopOpacity={0} />
+                                        <stop offset="0%" stopColor="#6558ef" stopOpacity={0.16} />
+                                        <stop offset="100%" stopColor="#6558ef" stopOpacity={0} />
                                     </linearGradient>
                                     <linearGradient id="gradPV" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#3525cd" stopOpacity={0.08} />
-                                        <stop offset="100%" stopColor="#3525cd" stopOpacity={0} />
+                                        <stop offset="0%" stopColor="#3328a8" stopOpacity={0.08} />
+                                        <stop offset="100%" stopColor="#3328a8" stopOpacity={0} />
                                     </linearGradient>
                                     <linearGradient id="gradSess" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#087a52" stopOpacity={0.08} />
-                                        <stop offset="100%" stopColor="#087a52" stopOpacity={0} />
+                                        <stop offset="0%" stopColor="#2f8a59" stopOpacity={0.08} />
+                                        <stop offset="100%" stopColor="#2f8a59" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--outline)" />
