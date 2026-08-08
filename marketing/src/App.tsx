@@ -72,10 +72,10 @@ function Nav() {
                 </div>
 
                 <div className="nav-actions">
-                    <Link to="/docs" className="button button--dark button--small">
+                    <a href="/docs#self-hosting" className="button button--dark button--small">
                         Deploy Iris
                         <ArrowRight size={15} />
-                    </Link>
+                    </a>
                 </div>
 
                 <button
@@ -95,9 +95,9 @@ function Nav() {
                     <a href="/#privacy" onClick={() => setIsOpen(false)}>Privacy</a>
                     <a href="/#developers" onClick={() => setIsOpen(false)}>Developers</a>
                     <Link to="/docs" onClick={() => setIsOpen(false)}>Docs</Link>
-                    <Link to="/docs" className="button button--dark" onClick={() => setIsOpen(false)}>
+                    <a href="/docs#self-hosting" className="button button--dark" onClick={() => setIsOpen(false)}>
                         Deploy Iris
-                    </Link>
+                    </a>
                 </div>
             )}
         </nav>
@@ -450,7 +450,7 @@ export function Home() {
                             <span className="status-dot" />
                             Open-source analytics
                             <span className="eyebrow-divider" />
-                            v0.2
+                            v1.0.0
                         </div>
                         <h1>
                             Your traffic,

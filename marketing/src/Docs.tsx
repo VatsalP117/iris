@@ -134,7 +134,7 @@ export default function Docs() {
         <div className="docs-header mb-16">
           <div className="docs-eyebrow">
             <span>Guides &amp; reference</span>
-            <em>v0.2.2</em>
+            <em>v1.0.0</em>
           </div>
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4">Build with Iris.</h1>
           <p className="text-lg text-muted-foreground leading-relaxed max-w-2xl">
