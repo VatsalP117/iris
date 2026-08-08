@@ -132,13 +132,14 @@ export default function Docs() {
       <main className="docs-content flex-1 max-w-4xl mx-auto px-6 sm:px-8 lg:px-12 py-12 lg:py-16">
         {/* Header */}
         <div className="docs-header mb-16">
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20 mb-4">
-            v0.2.2
-          </span>
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4">Documentation</h1>
+          <div className="docs-eyebrow">
+            <span>Guides &amp; reference</span>
+            <em>v0.2.2</em>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4">Build with Iris.</h1>
           <p className="text-lg text-muted-foreground leading-relaxed max-w-2xl">
-            Everything you need to integrate Iris Analytics into your app.
-            Privacy-first, cookieless, and self-hosted.
+            Everything you need to add private, self-hosted analytics to your product—from
+            the first event to a production deployment.
           </p>
         </div>
 

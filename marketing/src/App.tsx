@@ -6,7 +6,6 @@ import {
     BarChart3,
     Check,
     ChevronRight,
-    Code2,
     Container,
     Copy,
     Database,
@@ -14,13 +13,11 @@ import {
     LockKeyhole,
     Menu,
     MousePointer2,
-    Server,
     ShieldCheck,
-    TrendingUp,
     X,
     Zap,
 } from "lucide-react";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet } from "react-router-dom";
 
 function GitHubIcon({ size = 17 }: { size?: number }) {
     return (
@@ -58,11 +55,9 @@ function IrisMark({ compact = false }: { compact?: boolean }) {
 
 function Nav() {
     const [isOpen, setIsOpen] = useState(false);
-    const location = useLocation();
-    const isDocsPage = location.pathname === "/docs";
 
     return (
-        <nav className={`site-nav ${isDocsPage ? "site-nav--dark" : ""}`}>
+        <nav className="site-nav">
             <div className="nav-inner">
                 <Link to="/" className="brand" aria-label="Iris Analytics home">
                     <IrisMark />
@@ -70,28 +65,15 @@ function Nav() {
                 </Link>
 
                 <div className="nav-links">
-                    {!isDocsPage && (
-                        <>
-                            <a href="#product">Product</a>
-                            <a href="#privacy">Privacy</a>
-                            <a href="#developers">Developers</a>
-                        </>
-                    )}
+                    <a href="/#product">Product</a>
+                    <a href="/#privacy">Privacy</a>
+                    <a href="/#developers">Developers</a>
                     <Link to="/docs">Docs</Link>
                 </div>
 
                 <div className="nav-actions">
-                    <a
-                        href="https://github.com/VatsalP117/iris"
-                        className="nav-github"
-                        target="_blank"
-                        rel="noreferrer"
-                    >
-                        <GitHubIcon size={16} />
-                        <span>GitHub</span>
-                    </a>
                     <Link to="/docs" className="button button--dark button--small">
-                        Start tracking
+                        Deploy Iris
                         <ArrowRight size={15} />
                     </Link>
                 </div>
@@ -109,17 +91,12 @@ function Nav() {
 
             {isOpen && (
                 <div className="mobile-nav">
-                    {!isDocsPage && (
-                        <>
-                            <a href="#product" onClick={() => setIsOpen(false)}>Product</a>
-                            <a href="#privacy" onClick={() => setIsOpen(false)}>Privacy</a>
-                            <a href="#developers" onClick={() => setIsOpen(false)}>Developers</a>
-                        </>
-                    )}
+                    <a href="/#product" onClick={() => setIsOpen(false)}>Product</a>
+                    <a href="/#privacy" onClick={() => setIsOpen(false)}>Privacy</a>
+                    <a href="/#developers" onClick={() => setIsOpen(false)}>Developers</a>
                     <Link to="/docs" onClick={() => setIsOpen(false)}>Docs</Link>
-                    <a href="https://github.com/VatsalP117/iris">GitHub</a>
                     <Link to="/docs" className="button button--dark" onClick={() => setIsOpen(false)}>
-                        Start tracking
+                        Deploy Iris
                     </Link>
                 </div>
             )}
@@ -134,36 +111,14 @@ function AnalyticsPreview() {
             <div className="stage-orbit stage-orbit--two" />
 
             <motion.div
-                className="live-event-card"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.9, duration: 0.5 }}
-            >
-                <span className="live-pulse" />
-                <div>
-                    <strong>Live event</strong>
-                    <span>/docs · Bengaluru</span>
-                </div>
-                <span>now</span>
-            </motion.div>
-
-            <motion.div
-                className="dashboard-window"
-                initial={{ opacity: 0, y: 30, rotateX: 3 }}
-                animate={{ opacity: 1, y: 0, rotateX: 0 }}
+                className="dashboard-window dashboard-window--editorial"
+                initial={{ opacity: 0, y: 30, rotateX: 3, rotateZ: 1.25 }}
+                animate={{ opacity: 1, y: 0, rotateX: 0, rotateZ: 1.25 }}
                 transition={{ delay: 0.25, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
             >
                 <div className="dashboard-topbar">
-                    <div className="dashboard-brand">
-                        <IrisMark compact />
-                        <strong>Iris</strong>
-                    </div>
-                    <div className="dashboard-tabs">
-                        <span className="active">Overview</span>
-                        <span>Events</span>
-                        <span>Vitals</span>
-                    </div>
-                    <span className="dashboard-range">Last 7 days</span>
+                    <strong>Iris / Overview</strong>
+                    <span className="dashboard-live"><i /> Live</span>
                 </div>
 
                 <div className="dashboard-body">
@@ -171,28 +126,18 @@ function AnalyticsPreview() {
                         <div className="metric">
                             <span>Visitors</span>
                             <strong>8,492</strong>
-                            <em>↑ 18.4%</em>
                         </div>
                         <div className="metric">
                             <span>Pageviews</span>
                             <strong>21.6k</strong>
-                            <em>↑ 12.1%</em>
                         </div>
                         <div className="metric">
-                            <span>Bounce rate</span>
-                            <strong>38.2%</strong>
-                            <em className="neutral">− 2.4%</em>
+                            <span>Growth</span>
+                            <strong>+18.4%</strong>
                         </div>
                     </div>
 
                     <div className="chart-panel">
-                        <div className="chart-heading">
-                            <div>
-                                <span>Traffic</span>
-                                <strong>Visitors over time</strong>
-                            </div>
-                            <div className="chart-legend"><i /> Visitors</div>
-                        </div>
                         <svg viewBox="0 0 620 185" role="img" aria-label="Rising visitor traffic chart">
                             <defs>
                                 <linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1">
@@ -215,38 +160,8 @@ function AnalyticsPreview() {
                             />
                             <circle cx="518" cy="43" r="5" />
                         </svg>
-                        <div className="chart-days">
-                            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span>
-                            <span>Fri</span><span>Sat</span><span>Sun</span>
-                        </div>
-                    </div>
-
-                    <div className="dashboard-lists">
-                        <div>
-                            <span className="list-title">Top pages</span>
-                            <p><span>/</span><strong>6,204</strong></p>
-                            <p><span>/docs</span><strong>3,891</strong></p>
-                            <p><span>/pricing</span><strong>2,107</strong></p>
-                        </div>
-                        <div>
-                            <span className="list-title">Sources</span>
-                            <p><span>Direct</span><strong>42%</strong></p>
-                            <p><span>Google</span><strong>31%</strong></p>
-                            <p><span>GitHub</span><strong>18%</strong></p>
-                        </div>
                     </div>
                 </div>
-            </motion.div>
-
-            <motion.div
-                className="vitals-card"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.75, duration: 0.5 }}
-            >
-                <span>Core Web Vitals</span>
-                <div><strong>96</strong><i /></div>
-                <small>All systems healthy</small>
             </motion.div>
         </div>
     );
@@ -287,8 +202,8 @@ function ProductSection() {
         <section id="product" className="section product-section">
             <motion.div className="section-heading" {...rise}>
                 <div>
-                    <SectionLabel>One clear view</SectionLabel>
-                    <h2>Signal, without<br />the noise.</h2>
+                    <SectionLabel>01 / One clear view</SectionLabel>
+                    <h2>Every useful signal.<br /><em>None of the noise.</em></h2>
                 </div>
                 <p>
                     Iris turns pageviews, events, sources, and Web Vitals into one focused view.
@@ -352,12 +267,59 @@ function ProductSection() {
     );
 }
 
+function SignalStorySection() {
+    const steps = [
+        { number: "01", label: "Source", value: "google.com", detail: "2,931 visits" },
+        { number: "02", label: "Page", value: "/docs", detail: "3,891 views" },
+        { number: "03", label: "Action", value: "signup_click", detail: "18.4% conversion" },
+    ];
+
+    return (
+        <section className="signal-story">
+            <div className="section signal-story-inner">
+                <motion.div className="story-intro" {...rise}>
+                    <SectionLabel>02 / The whole journey</SectionLabel>
+                    <h2>See what happened.<br /><em>Understand why.</em></h2>
+                    <p>
+                        Follow the thread from discovery to decision. Iris connects each useful
+                        moment without building a profile of the person behind it.
+                    </p>
+                </motion.div>
+
+                <motion.div className="story-flow" {...rise}>
+                    <div className="story-flow-header">
+                        <span><i /> Live journey</span>
+                        <span>anonymous session · 42s</span>
+                    </div>
+                    <div className="story-steps">
+                        {steps.map((step, index) => (
+                            <div className="story-step" key={step.label}>
+                                <span className="story-number">{step.number}</span>
+                                <div>
+                                    <small>{step.label}</small>
+                                    <strong>{step.value}</strong>
+                                    <span>{step.detail}</span>
+                                </div>
+                                {index < steps.length - 1 && <ChevronRight size={17} />}
+                            </div>
+                        ))}
+                    </div>
+                    <div className="story-caption">
+                        <span>One journey, three useful signals</span>
+                        <strong>Zero personal identifiers collected</strong>
+                    </div>
+                </motion.div>
+            </div>
+        </section>
+    );
+}
+
 function PrivacySection() {
     return (
         <section id="privacy" className="privacy-section">
             <div className="section privacy-inner">
                 <motion.div className="privacy-copy" {...rise}>
-                    <SectionLabel>Data sovereignty</SectionLabel>
+                    <SectionLabel>03 / Data sovereignty</SectionLabel>
                     <h2>Your analytics<br />should be yours.</h2>
                     <p>
                         Iris runs on your infrastructure and stores data in your database.
@@ -425,7 +387,7 @@ function DevelopersSection() {
     return (
         <section id="developers" className="section developers-section">
             <motion.div className="developer-copy" {...rise}>
-                <SectionLabel>Built for developers</SectionLabel>
+                <SectionLabel>04 / Built for developers</SectionLabel>
                 <h2>From zero to signal<br />in a few lines.</h2>
                 <p>
                     Add the tiny TypeScript SDK, point it at your Iris instance, and start.
@@ -486,35 +448,21 @@ export function Home() {
                     >
                         <div className="eyebrow">
                             <span className="status-dot" />
-                            Open-source web analytics
+                            Open-source analytics
                             <span className="eyebrow-divider" />
                             v0.2
                         </div>
                         <h1>
                             Your traffic,
-                            <span>in focus.</span>
+                            <span>beautifully clear.</span>
                         </h1>
                         <p>
-                            Privacy-first analytics that shows what people use, how your site
-                            performs, and where growth comes from—without giving away your data.
+                            A calmer, clearer way to understand what people use, how your site
+                            performs, and where growth begins—without giving away your data.
                         </p>
-                        <div className="hero-actions">
-                            <Link to="/docs" className="button button--dark">
-                                Deploy Iris <ArrowRight size={17} />
-                            </Link>
-                            <a
-                                href="https://github.com/VatsalP117/iris"
-                                className="button button--light"
-                                target="_blank"
-                                rel="noreferrer"
-                            >
-                                <GitHubIcon size={17} /> View on GitHub
-                            </a>
-                        </div>
                         <div className="hero-footnote">
-                            <span><Check size={14} /> No cookies</span>
-                            <span><Check size={14} /> Self-hosted</span>
-                            <span><Check size={14} /> One Docker image</span>
+                            <span><i /> Cookie-free</span>
+                            <span><i /> Self-hosted</span>
                         </div>
                     </motion.div>
 
@@ -522,18 +470,23 @@ export function Home() {
                 </div>
 
                 <div className="proof-strip">
-                    <span>Everything you need. Nothing you don’t.</span>
-                    <div>
-                        <span><Server size={17} /> Go-powered</span>
-                        <span><Database size={17} /> SQLite-simple</span>
-                        <span><ShieldCheck size={17} /> Cookie-free</span>
-                        <span><Code2 size={17} /> TypeScript SDK</span>
-                        <span><TrendingUp size={17} /> Web Vitals</span>
+                    <div className="proof-item">
+                        <span>01 / Clarity</span>
+                        <strong>One calm view of everything that matters.</strong>
+                    </div>
+                    <div className="proof-item">
+                        <span>02 / Privacy</span>
+                        <strong>Your data stays yours.</strong>
+                    </div>
+                    <div className="proof-item">
+                        <span>03 / Speed</span>
+                        <strong>Built off the critical path.</strong>
                     </div>
                 </div>
             </section>
 
             <ProductSection />
+            <SignalStorySection />
             <PrivacySection />
             <DevelopersSection />
 
@@ -558,11 +511,8 @@ export function Home() {
 }
 
 function Footer() {
-    const location = useLocation();
-    const isDocsPage = location.pathname === "/docs";
-
     return (
-        <footer className={`site-footer ${isDocsPage ? "site-footer--dark" : ""}`}>
+        <footer className="site-footer">
             <div className="footer-main">
                 <div>
                     <Link to="/" className="brand">
