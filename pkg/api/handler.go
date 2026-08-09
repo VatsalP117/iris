@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,11 +15,16 @@ import (
 )
 
 type Handler struct {
-	Repo core.EventRepository
+	Repo       core.EventRepository
+	adminToken string
 }
 
 func NewHandler(repo core.EventRepository) *Handler {
 	return &Handler{Repo: repo}
+}
+
+func NewHandlerWithAdminToken(repo core.EventRepository, adminToken string) *Handler {
+	return &Handler{Repo: repo, adminToken: strings.TrimSpace(adminToken)}
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
@@ -393,6 +399,15 @@ func (h *Handler) Sites(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		h.ListSites(w, r)
 	case http.MethodPost:
+		if h.adminToken == "" {
+			http.Error(w, "Site management is disabled until IRIS_ADMIN_TOKEN is configured", http.StatusServiceUnavailable)
+			return
+		}
+		provided := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if len(provided) != len(h.adminToken) || subtle.ConstantTimeCompare([]byte(provided), []byte(h.adminToken)) != 1 {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 		var site core.Site
 		if err := json.NewDecoder(r.Body).Decode(&site); err != nil {

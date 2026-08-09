@@ -29,7 +29,7 @@ func TestTrackEvent_DuplicateClientIDIsIdempotent(t *testing.T) {
 		t.Fatalf("CreateSite returned error: %v", err)
 	}
 
-	handler := NewHandler(repo)
+	handler := NewHandlerWithAdminToken(repo, "test-admin-token")
 	body := []byte(`{
 		"id": "client-event-1",
 		"n": "$pageview",
@@ -158,11 +158,12 @@ func TestSites_CreatesRegisteredSite(t *testing.T) {
 		t.Fatalf("NewSqliteDB returned error: %v", err)
 	}
 	t.Cleanup(func() { _ = repo.Close() })
-	handler := NewHandler(repo)
+	handler := NewHandlerWithAdminToken(repo, "test-admin-token")
 
 	request := httptest.NewRequest(http.MethodPost, "/api/sites", strings.NewReader(
 		`{"site_id":"docs","name":"Documentation","timezone":"Asia/Kolkata","retention_days":90,"domains":["docs.example.com"]}`,
 	))
+	request.Header.Set("Authorization", "Bearer test-admin-token")
 	response := httptest.NewRecorder()
 	handler.Sites(response, request)
 	if response.Code != http.StatusCreated {
@@ -175,5 +176,32 @@ func TestSites_CreatesRegisteredSite(t *testing.T) {
 	}
 	if len(sites) != 1 || sites[0].SiteID != "docs" || sites[0].Timezone != "Asia/Kolkata" {
 		t.Fatalf("unexpected sites: %+v", sites)
+	}
+}
+
+func TestSites_RequiresAdminToken(t *testing.T) {
+	repo, err := db.NewSqliteDB(filepath.Join(t.TempDir(), "iris.db"))
+	if err != nil {
+		t.Fatalf("NewSqliteDB returned error: %v", err)
+	}
+	t.Cleanup(func() { _ = repo.Close() })
+	body := `{"site_id":"docs","domains":["docs.example.com"]}`
+
+	for _, test := range []struct {
+		name    string
+		handler *Handler
+		status  int
+	}{
+		{name: "disabled", handler: NewHandler(repo), status: http.StatusServiceUnavailable},
+		{name: "unauthorized", handler: NewHandlerWithAdminToken(repo, "secret"), status: http.StatusUnauthorized},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/api/sites", strings.NewReader(body))
+			response := httptest.NewRecorder()
+			test.handler.Sites(response, request)
+			if response.Code != test.status {
+				t.Fatalf("status = %d, want %d", response.Code, test.status)
+			}
+		})
 	}
 }

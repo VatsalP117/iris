@@ -64,7 +64,7 @@ func main() {
 		}
 	}
 
-	handler := api.NewHandler(sqliteRepo)
+	handler := api.NewHandlerWithAdminToken(sqliteRepo, os.Getenv("IRIS_ADMIN_TOKEN"))
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/event", api.NewCORSMiddleware(handler.TrackEvent))
