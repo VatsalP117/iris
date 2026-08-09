@@ -2,11 +2,15 @@ const VID_KEY = "iris_vid";
 const VID_DAY_KEY = "iris_vid_day";
 const VID_LOCK_NAME = "iris_visitor_id";
 const SID_KEY = "iris_sid";
+const SID_LAST_ACTIVITY_KEY = "iris_sid_last_activity";
+const SID_DAY_KEY = "iris_sid_day";
+const SESSION_INACTIVITY_MS = 30 * 60 * 1000;
 
 let memoryVID = "";
 let memoryVIDDay = "";
 let memorySID = "";
-let sessionInitialized = false;
+let memorySIDLastActivity = 0;
+let memorySIDDay = "";
 
 export function generateId(): string {
     if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -73,27 +77,33 @@ export function getVisitorIdentity(): VisitorIdentity {
 }
 
 /**
- * Returns a session-scoped ID stored in sessionStorage.
- * Generates a new ID per browser tab / session (cleared when tab closes).
+ * Returns an anonymous session ID shared by same-origin tabs. The session rolls
+ * after 30 minutes without tracked activity and at the UTC visitor-ID boundary.
  */
 export function getSessionId(): string {
+    const now = Date.now();
+    const today = currentUTCDateKey();
     try {
-        let sid = sessionStorage.getItem(SID_KEY);
-        if (!sessionInitialized && window.opener && sid) {
+        let sid = localStorage.getItem(SID_KEY);
+        const lastActivity = Number(localStorage.getItem(SID_LAST_ACTIVITY_KEY) || "0");
+        const sessionDay = localStorage.getItem(SID_DAY_KEY);
+        if (!sid || sessionDay !== today || now - lastActivity > SESSION_INACTIVITY_MS) {
             sid = generateId();
-            sessionStorage.setItem(SID_KEY, sid);
+            localStorage.setItem(SID_KEY, sid);
+            localStorage.setItem(SID_DAY_KEY, today);
         }
-        if (!sid) {
-            sid = generateId();
-            sessionStorage.setItem(SID_KEY, sid);
-        }
-        sessionInitialized = true;
+        localStorage.setItem(SID_LAST_ACTIVITY_KEY, String(now));
         return sid;
     } catch {
-        if (!memorySID) {
+        if (
+            !memorySID ||
+            memorySIDDay !== today ||
+            now - memorySIDLastActivity > SESSION_INACTIVITY_MS
+        ) {
             memorySID = generateId();
+            memorySIDDay = today;
         }
-        sessionInitialized = true;
+        memorySIDLastActivity = now;
         return memorySID;
     }
 }
