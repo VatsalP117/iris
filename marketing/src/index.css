@@ -796,11 +796,21 @@ button {
     min-height: 342px;
 }
 
+.bento-card--events {
+    display: flex;
+    flex-direction: column;
+}
+
 .card-copy {
     position: relative;
     z-index: 2;
     max-width: 430px;
     padding: 36px;
+}
+
+.bento-card--events .card-copy {
+    padding-bottom: 0;
+    margin-bottom: 14px;
 }
 
 .card-icon {
@@ -900,10 +910,7 @@ button {
 }
 
 .event-stream {
-    position: absolute;
-    left: 36px;
-    right: 36px;
-    bottom: 28px;
+    margin: auto 36px 28px;
     overflow: hidden;
     border: 1px solid var(--line);
     border-radius: 8px;
@@ -1645,7 +1652,14 @@ button {
         padding: 26px;
     }
 
-    .event-stream,
+    .bento-card--events .card-copy {
+        padding-bottom: 0;
+    }
+
+    .event-stream {
+        margin: auto 26px 28px;
+    }
+
     .vital-score {
         left: 26px;
         right: 26px;
