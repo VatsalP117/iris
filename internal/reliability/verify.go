@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/VatsalP117/iris/pkg/core"
 	_ "github.com/mattn/go-sqlite3"
@@ -140,10 +141,11 @@ func VerifyStorage(ctx context.Context, dbPath string, manifest []PlannedEvent, 
 
 func storedMatches(planned PlannedEvent, stored storedEvent) bool {
 	expected := planned.Event
+	expectedReferrer := sanitizedLabURL(expected.Referrer)
 	if stored.EventName != expected.EventName ||
 		stored.URL != expected.URL ||
 		stored.Domain != expected.Domain ||
-		stored.Referrer != expected.Referrer ||
+		stored.Referrer != expectedReferrer ||
 		stored.ScreenWidth != expected.ScreenWidth ||
 		stored.SiteID != expected.SiteID ||
 		stored.SessionID != expected.SessionID ||
@@ -154,6 +156,20 @@ func storedMatches(planned PlannedEvent, stored storedEvent) bool {
 	return propertyString(stored.Properties, "$test_run") == propertyString(expected.Properties, "$test_run") &&
 		propertyInt(stored.Properties, "$test_seq") == planned.Sequence &&
 		propertyString(stored.Properties, "$test_flow") == propertyString(expected.Properties, "$test_flow")
+}
+
+func sanitizedLabURL(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	parsed.RawQuery = ""
+	parsed.ForceQuery = false
+	parsed.Fragment = ""
+	return parsed.String()
 }
 
 func propertyString(properties map[string]any, key string) string {
@@ -214,7 +230,16 @@ func VerifyAggregates(ctx context.Context, config Config, manifest []PlannedEven
 		expectedStats.Pageviews++
 		visitors[planned.Event.VisitorID] = struct{}{}
 		sessions[planned.Event.SessionID] = struct{}{}
-		expectedPages[planned.Event.URL]++
+		pathname := planned.Event.Pathname
+		if pathname == "" {
+			if parsed, err := url.Parse(planned.Event.URL); err == nil {
+				pathname = parsed.EscapedPath()
+			}
+			if pathname == "" {
+				pathname = "/"
+			}
+		}
+		expectedPages[pathname]++
 		expectedDevices[deviceForWidth(planned.Event.ScreenWidth)]++
 		host := normalizeLabReferrer(planned.Event.Referrer)
 		if host != "" {
@@ -492,22 +517,41 @@ func verifyDateWindows(ctx context.Context, config Config) []AggregateCheck {
 	defer database.Close()
 
 	siteID := config.SiteID + "-date-window"
+	domain := domainForSite(siteID)
+	now := time.Now().UTC().UnixMicro()
+	if _, err := database.ExecContext(ctx, `
+		INSERT OR IGNORE INTO sites(id, name, timezone, retention_days, created_at_us)
+		VALUES (?, ?, 'UTC', 365, ?)
+	`, siteID, siteID, now); err != nil {
+		return []AggregateCheck{{Name: "date-window-fixture", Error: err.Error()}}
+	}
 	timestamps := []string{
 		"2026-03-24 00:00:00",
 		"2026-03-24 23:59:59",
 		"2026-03-25 00:00:00",
 	}
 	for index, timestamp := range timestamps {
+		occurredAt, parseErr := time.ParseInLocation("2006-01-02 15:04:05", timestamp, time.UTC)
+		if parseErr != nil {
+			return []AggregateCheck{{Name: "date-window-fixture", Error: parseErr.Error()}}
+		}
 		_, err := database.ExecContext(ctx, `
-			INSERT OR REPLACE INTO events (
-				id, event_name, url, domain, referrer, screen_width, site_id,
-				session_id, visitor_id, properties, timestamp
-			) VALUES (?, '$pageview', ?, ?, '', 1440, ?, ?, ?, '{}', ?)
+			INSERT INTO events (
+				id, event_name, site_id, occurred_at_us, received_at_us, timestamp,
+				url, domain, pathname, referrer, referrer_host, screen_width,
+				session_id, visitor_id, properties, schema_version, sdk_version
+			) VALUES (?, '$pageview', ?, ?, ?, ?, ?, ?, ?, '', '', 1440, ?, ?, '{}', 1, '')
+			ON CONFLICT(id) DO UPDATE SET occurred_at_us = excluded.occurred_at_us,
+				received_at_us = excluded.received_at_us, timestamp = excluded.timestamp
 		`,
 			fmt.Sprintf("iris-lab-date-%s-%d", config.RunID, index),
-			fmt.Sprintf("https://%s/date-%d", defaultDomain, index),
-			defaultDomain,
 			siteID,
+			occurredAt.UnixMicro(),
+			occurredAt.UnixMicro(),
+			timestamp,
+			fmt.Sprintf("https://%s/date-%d", domain, index),
+			domain,
+			fmt.Sprintf("/date-%d", index),
 			fmt.Sprintf("date-session-%d", index),
 			fmt.Sprintf("date-visitor-%d", index),
 			timestamp,

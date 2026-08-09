@@ -155,6 +155,7 @@ export default function Docs() {
 const iris = new Iris({
   host: 'https://your-iris-server.com',
   siteId: 'my-site',
+  timezone: 'UTC',
 });
 
 iris.start();`}</CodeBlock>
@@ -197,12 +198,13 @@ yarn add iris-analytics`}</CodeBlock>
         {/* Configuration */}
         <section id="configuration" className="docs-section">
           <h2>Configuration</h2>
-          <p>Pass a configuration object when initializing the <code>Iris</code> class. Only <code>host</code> and <code>siteId</code> are required.</p>
+          <p>Pass a configuration object when initializing the <code>Iris</code> class. The timezone must match the registered site's IANA timezone.</p>
 
           <h3>IrisConfig</h3>
           <PropTable rows={[
             ['host', 'string', '—', 'URL of your Iris server (required)'],
             ['siteId', 'string', '—', 'Unique site identifier (required)'],
+            ['timezone', 'string', 'UTC', 'IANA timezone; must match the registered site'],
             ['autocapture', 'AutocaptureConfig | false', 'false', 'Enable auto-capture features'],
             ['batching', 'BatchConfig', '—', 'Configure event batching'],
             ['debug', 'boolean', 'false', 'Log events and state to console'],
@@ -322,6 +324,7 @@ iris.track('cta_clicked');`}</CodeBlock>
           <CodeBlock title="terminal">{`docker run -d \\
   -p 8080:8080 \\
   -v ./data:/app/data \\
+  -e IRIS_ADMIN_TOKEN='replace-with-a-long-random-token' \\
   ghcr.io/vatsalp117/iris:latest`}</CodeBlock>
 
           <h3>Docker Compose</h3>
@@ -338,11 +341,18 @@ services:
     environment:
       - PORT=8080
       - DB_PATH=/app/data/iris.db
-      - DASHBOARD_DIR=/app/dashboard/dist`}</CodeBlock>
+      - DASHBOARD_DIR=/app/dashboard/dist
+      - IRIS_ADMIN_TOKEN=replace-with-a-long-random-token`}</CodeBlock>
 
           <Callout type="warning">
-            Mount a volume for <code>/app/data</code> to persist your SQLite database across container restarts and updates.
+            Mount a volume for <code>/app/data</code> and replace the example admin token. Keep that token server-side; it authorizes site registration.
           </Callout>
+
+          <h3>Register a Site</h3>
+          <CodeBlock title="terminal">{`curl -X POST http://localhost:8080/api/sites \\
+  -H 'Content-Type: application/json' \\
+  -H 'Authorization: Bearer replace-with-a-long-random-token' \\
+  -d '{"site_id":"my-site","domains":["example.com"],"timezone":"UTC","retention_days":365}'`}</CodeBlock>
         </section>
 
         {/* Environment Variables */}
@@ -354,6 +364,7 @@ services:
             ['PORT', 'number', '8080', 'Port the HTTP server listens on'],
             ['DB_PATH', 'string', '/app/data/iris.db', 'Path to the SQLite database file'],
             ['DASHBOARD_DIR', 'string', '/app/dashboard/dist', 'Path to the dashboard static files directory'],
+            ['IRIS_ADMIN_TOKEN', 'string', '—', 'Bearer token required to register or update sites'],
           ]} />
         </section>
 
@@ -382,6 +393,7 @@ services:
 
           <h3>Event Payload</h3>
           <PropTable rows={[
+            ['id', 'string', '—', 'Client event ID (idempotency key)'],
             ['n', 'string', '—', 'Event name (e.g. $pageview, $click, signup)'],
             ['u', 'string', '—', 'Full page URL'],
             ['d', 'string', '—', 'Domain / hostname'],
@@ -391,6 +403,9 @@ services:
             ['sid', 'string', '—', 'Session ID'],
             ['vid', 'string', '—', 'Visitor ID (anonymous, daily-rotating)'],
             ['p', 'object', '—', 'Custom properties (optional)'],
+            ['ts', 'string', '—', 'Occurrence time (ISO 8601 UTC)'],
+            ['v', 'number', '1', 'Wire schema version'],
+            ['sv', 'string', '—', 'SDK version'],
           ]} />
 
           <h3>Stats &amp; Analytics</h3>
@@ -434,11 +449,15 @@ services:
           <div className="space-y-6 mt-8">
             <div className="docs-privacy-card p-6 rounded-2xl bg-white/[0.03] border border-white/10">
               <h4 className="font-bold mb-2">🍪 Zero Cookies</h4>
-              <p className="text-sm text-muted-foreground leading-relaxed">Iris never sets any cookies. Visitor and session IDs are stored in <code>localStorage</code> and <code>sessionStorage</code>, which are first-party and inaccessible to third-party scripts.</p>
+              <p className="text-sm text-muted-foreground leading-relaxed">Iris never sets cookies. Visitor and session IDs use first-party <code>localStorage</code>; like any same-origin storage, scripts running on that origin may access it.</p>
             </div>
             <div className="docs-privacy-card p-6 rounded-2xl bg-white/[0.03] border border-white/10">
               <h4 className="font-bold mb-2">🔄 Daily-Rotating Visitor IDs</h4>
-              <p className="text-sm text-muted-foreground leading-relaxed">Visitor IDs are regenerated every UTC day. This prevents long-term tracking of individual users while still providing meaningful daily analytics.</p>
+              <p className="text-sm text-muted-foreground leading-relaxed">Visitor IDs are regenerated at midnight in the configured site timezone. This prevents long-term tracking while keeping daily analytics aligned with the site's calendar.</p>
+            </div>
+            <div className="docs-privacy-card p-6 rounded-2xl bg-white/[0.03] border border-white/10">
+              <h4 className="font-bold mb-2">⏱️ Activity Sessions</h4>
+              <p className="text-sm text-muted-foreground leading-relaxed">Per-site session IDs are shared across same-origin tabs and renew after 30 minutes without tracked activity.</p>
             </div>
             <div className="docs-privacy-card p-6 rounded-2xl bg-white/[0.03] border border-white/10">
               <h4 className="font-bold mb-2">📍 No PII Collection</h4>

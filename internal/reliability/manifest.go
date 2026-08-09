@@ -61,18 +61,22 @@ func buildEvent(runID, siteID string, sequence int) PlannedEvent {
 		properties["$rating"] = "good"
 	}
 
+	domain := domainForSite(siteID)
 	return PlannedEvent{
 		Sequence: sequence,
 		Event: core.Event{
-			EventName:   eventName,
-			URL:         "https://" + defaultDomain + page,
-			Domain:      defaultDomain,
-			Referrer:    labReferrers[sequence%len(labReferrers)],
-			ScreenWidth: labWidths[sequence%len(labWidths)],
-			SiteID:      siteID,
-			SessionID:   fmt.Sprintf("session-%06d", sequence/4),
-			VisitorID:   fmt.Sprintf("visitor-%06d", sequence/7),
-			Properties:  properties,
+			ID:            fmt.Sprintf("%s-%06d", runID, sequence),
+			EventName:     eventName,
+			URL:           "https://" + domain + page,
+			Domain:        domain,
+			Referrer:      labReferrers[sequence%len(labReferrers)],
+			ScreenWidth:   labWidths[sequence%len(labWidths)],
+			SiteID:        siteID,
+			SessionID:     fmt.Sprintf("session-%06d", sequence/4),
+			VisitorID:     fmt.Sprintf("visitor-%06d", sequence/7),
+			Properties:    properties,
+			SchemaVersion: 1,
+			SDKVersion:    "iris-lab",
 		},
 	}
 }

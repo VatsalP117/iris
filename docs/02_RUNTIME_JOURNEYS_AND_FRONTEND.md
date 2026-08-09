@@ -17,7 +17,7 @@ sequenceDiagram
     SDK->>Store: get/create session ID and today's visitor ID
     SDK->>SDK: build $pageview from location/referrer/width/siteId
     SDK-->>API: sendBeacon JSON (or fetch if Beacon API absent)
-    API->>API: decode; replace ID and timestamp; truncate props
+    API->>API: validate site/domain/version; sanitize URL; truncate props
     API->>DB: INSERT event
     DB-->>API: success
     API-->>SDK: 202 Accepted (not observed by Beacon code)
@@ -31,20 +31,30 @@ Text trace:
 1. Consumer code constructs `Iris`. The constructor merges defaults (`autocapture: false`, `debug: false`) and constructs `Transport`; a batching timer can therefore start **before** `Iris.start()` (`web/src/index.ts:17-24`; `transport.ts:15-27`).
 2. `start()` is per-instance idempotent. Automatic pageviews occur only when `autocapture.pageviews === true`; despite public examples, autocapture is off by default (`index.ts:26-42`).
 3. `track("$pageview")` reads the full `window.location.href`, hostname, `document.referrer`, viewport width, configured site ID, session ID, and visitor ID (`index.ts:44-56`).
-4. Visitor ID is localStorage-stable for one UTC date; session ID is sessionStorage-stable. Storage errors use page-memory IDs (`storage.ts`).
+4. Visitor ID is `localStorage`-stable for one UTC date. Session ID is shared
+   across same-origin tabs through `localStorage` and rolls after 30 minutes of
+   tracked inactivity or at the UTC visitor boundary. Storage errors use
+   page-memory IDs (`storage.ts`).
 5. Without batching, transport calls Beacon whenever the API exists. It does not inspect Beacon’s Boolean result and uses fetch only when Beacon is absent (`transport.ts:81-99`).
 6. CORS reflects any supplied origin and permits credentials (`pkg/api/cors.go`).
-7. `TrackEvent` limits the body to 1 MiB, decodes one JSON value, replaces `id` and `ts`, truncates property string values to 203 bytes/characters in byte-slicing terms, and inserts synchronously (`pkg/api/handler.go:48-74,422-443`).
-8. SQLite stores JSON properties as text and ingestion time as `DATETIME` (`pkg/db/sqlite.go:51-68,77-103`).
+7. `TrackEvent` limits the body to 1 MiB, validates required identifiers,
+   reserved names, width, schema version, timestamp skew, registered site, and
+   allowed hostname. It removes URL/referrer query strings and fragments and
+   truncates property strings before inserting synchronously.
+8. SQLite stores JSON properties as validated text, client occurrence and server
+   receive times as UTC integer microseconds, and normalized URL dimensions.
 9. A successful write returns empty `202 Accepted`. Errors are plain text 400/500 and logged.
 
 Failure/edge paths:
 
-- Missing/empty fields, invalid URLs, arbitrary event names, negative widths, deeply nested data, and forged site/session/visitor IDs are accepted if JSON decoding and DB insertion succeed.
+- Deeply nested properties are not depth-limited, and browser identifiers remain
+  caller assertions. Invalid required fields, URLs, widths, reserved names,
+  sites, domains, clock skew, and schema versions are rejected.
 - JSON trailing values are not explicitly rejected; only the first decoded value is used.
 - Beacon refusal, offline state, 429/5xx, and connection loss have no SDK retry/fallback. The baseline confirms losses (`rejected-beacon...`, `transient-server-failure...`, `offline...`).
-- A response lost after insert can be duplicated by browser/network behavior; the baseline observed two stored attempts.
-- Server logs event name, domain, site, and full URL, potentially including query secrets.
+- A response lost after insert can be replayed safely when it retains the same
+  client event ID; the unique ID conflict does not insert a second row.
+- Server logs the normalized URL after query strings and fragments are removed.
 - No application metric or trace records the flow.
 
 Relevant verification: `testing/load/browser/run.mjs → initial-pageview`, `storage-unavailable...`, delivery-chaos scenarios; `internal/reliability → VerifyStorage/VerifyAggregates`.
@@ -54,10 +64,12 @@ Relevant verification: `testing/load/browser/run.mjs → initial-pageview`, `sto
 1. First automatic pageview calls `enableHistoryPatch`.
 2. A module-global `pushStatePatched` allows only one instance to patch `history.pushState`.
 3. The patch calls the original method, then sends a pageview; `popstate` also sends one (`web/src/index.ts:63-77`).
-4. `replaceState`, `pageshow`/BFCache restoration, and an explicit `hashchange` handler do not exist. Browser behavior can cause hash navigation to surface through history, but it is not a full routing contract.
+4. `replaceState` is patched and persisted BFCache `pageshow` events emit a
+   pageview. There is no explicit `hashchange` handler.
 5. `stop()` flushes/destroys transport, removes click/popstate listeners, restores `pushState`, and clears the global guard only for the instance that owns the saved original.
 
-Known edge results from the committed baseline:
+Historical edge results from the committed 2026-07-29 baseline (captured before
+the current navigation fixes and retained as regression evidence):
 
 - same-URL `pushState` double-counts;
 - `replaceState` is missed;
@@ -99,7 +111,9 @@ This is not a selected-event conversion rate. A custom event in a session withou
 5. Server rejects over 50 events with 413; an empty array returns 202; otherwise it gives every row the same ingestion timestamp and inserts all rows in one transaction (`handler.go:76-116`; `sqlite.go:109-149`).
 6. Any row failure rolls back the whole batch. The client still has already discarded the queue.
 
-The transaction is a good atomicity boundary: no partial batch is committed. It does not provide idempotency or durable delivery.
+The transaction is a good atomicity boundary: no partial batch is committed.
+Client-generated IDs make replay idempotent, although the browser queue is still
+volatile and delivery is not guaranteed.
 
 ## Journey 5: open/select/refresh dashboard
 
@@ -111,8 +125,8 @@ sequenceDiagram
     participant DB as SQLite
     B->>App: load /
     App->>API: GET /api/sites
-    API->>DB: group events by effective site
-    API-->>App: inferred SiteStat[]
+    API->>DB: read registered sites and domains
+    API-->>App: SiteStat[]
     App->>App: select first site
     par 11 overview requests
       App->>API: trends/pages/referrers/vitals/distributions/pages score/devices/3 series
@@ -127,9 +141,13 @@ sequenceDiagram
 
 Important details:
 
-- Sites are inferred from existing events: no data means no site can be selected or configured (`dashboard/src/App.tsx:94-103`; `pkg/db/query.go → GetSites`).
+- Sites come from the `sites` and `site_domains` registry, so a newly registered
+  site can be selected before its first event. The dashboard lists sites but
+  registration currently happens through `POST /api/sites` rather than a form.
 - The first returned site is auto-selected.
-- Date presets use the operator browser clock/timezone. `24h` sends an offset timestamp; day presets format local calendar dates, while SQLite grouping and visitor rotation are UTC-oriented. This can create boundary surprises.
+- Date presets use the operator browser clock/timezone. `24h` sends an offset
+  timestamp; day presets format local calendar dates. Event buckets and visitor
+  rotation use the configured site timezone, which must match in SDK and server.
 - An `AbortController` cancels the previous overview request group on rapid changes, but the effect has no explicit unmount cleanup. EventsPage has separate controllers/cleanup.
 - `Promise.all` is all-or-nothing: one failed overview endpoint prevents every state update, leaving prior data visible and only logging to the browser console.
 - The dashboard fetches all overview data regardless of active needs. `GetPerformanceScore` internally repeats vital/distribution queries, increasing DB work.
@@ -154,7 +172,9 @@ Vitals view uses aggregate P75, distributions, score, and per-page data already 
 - **State:** local React state in `App`; EventsPage owns its query/result/selection/series state. No context/store.
 - **Data fetching/cache:** native fetch through `api.ts`; no caching, deduplication, revalidation, retry, timeout, schema validation, or persistence.
 - **Forms/validation:** search and select controls only; no server mutations. Validation is substring filtering.
-- **Authentication/authorization:** none in UI or API.
+- **Authentication/authorization:** the UI has none. The API requires an admin
+  bearer token only for site mutation; site listing, analytics reads, and event
+  ingestion remain unauthenticated.
 - **Loading/errors:** loading spinners/empty states exist; errors only reach console and old state may remain. No React Error Boundary.
 - **Components:** mostly presentational components receive typed props. `App` is a growing orchestrator and `EventsPage` mixes presentation/fetching.
 - **Styling:** one global CSS file with CSS variables/classes and inline styles. No formal shared design-system package.
@@ -179,7 +199,9 @@ Business logic leaked/duplicated in UI:
 - Module-global history patching makes multiple versions/instances share fragile global state.
 - `initVitals` returns no cleanup, so `stop()` cannot unregister web-vitals observers/callbacks.
 - Transport lifecycle is coupled to construction: after `stop()` destroys the timer/listeners, a later `start()` does not create a new Transport; sending may still queue with no timer until max-size/manual destroy.
-- Types use `any` for properties. The wire payload omits server fields, which is appropriate, but there is no schema/version/SDK version/event occurrence time.
+- Types use `any` for properties. The wire payload includes client ID,
+  occurrence time, schema version, and SDK version, but there is no generated or
+  runtime-validated public schema.
 
 ### Marketing
 

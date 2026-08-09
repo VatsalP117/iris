@@ -8,9 +8,9 @@
 
 | Layer | Evidence | What it proves |
 |---|---|---|
-| API helper unit | `pkg/api/analytics_test.go` | previous-period duration and percentage edge cases |
+| API/ingestion unit | `pkg/api/analytics_test.go`, `ingest_test.go` | period math, validation, idempotency, site/domain enforcement, admin token |
 | CORS unit | `pkg/api/cors_test.go` | arbitrary-origin reflection, credentials, preflight, wildcard |
-| SQLite integration | `pkg/db/query_test.go` | site/domain grouping, devices, referrer normalization, P75, custom events, scores, date/time filters |
+| SQLite integration | `pkg/db/*_test.go` | queries, fresh/legacy migrations, site replacement, projection transactions/rebuild/lag, retention |
 | Reliability unit/integration | `internal/reliability/reliability_test.go` | deterministic manifests, single/batch reconciliation, concurrent reads, stages, comparisons, missing-event detection, target safety |
 | Full real-server correctness/load | `internal/reliability`; Task profiles | accepted rows/fields/public aggregates, latency/resources |
 | Fault/recovery | `internal/reliability/faults.go` | restart, 503/network, lock/full, backup/integrity/restored boot |
@@ -27,13 +27,14 @@
 - marketing route/content tests;
 - cross-browser Safari/Firefox/mobile tests;
 - automated API contract/OpenAPI tests;
-- migrations/schema upgrade tests (no migration system);
-- auth/security tests (no auth);
+- migration rollback/downgrade and multi-version fixture coverage beyond the
+  fresh/legacy v2 migration tests;
+- authorization coverage beyond the focused site-admin-token tests;
 - accessibility/visual regression tests;
 - container image/startup/Compose tests;
 - static security/dependency/secret/license scans;
 - production infrastructure tests (no IaC);
-- retention/export/deletion tests (features absent).
+- export/privacy-deletion tests; retention itself has focused repository tests.
 
 ### Business rule/workflow coverage
 
@@ -41,9 +42,9 @@
 |---|---|---|
 | Initial pageview | Browser PASS baseline | Cross-browser and backend row integration separated |
 | SPA navigation | Browser detailed baseline | Many confirmed failures accepted as known |
-| Manual/batch delivery | Lab + browser | No durable/retry/idempotency behavior to assert |
-| Daily visitor rotation | Browser identity scenarios/readme | No focused deterministic UTC-boundary unit test found |
-| Session identity | Browser; duplicate-tab failure | Semantics unsettled |
+| Manual/batch delivery | Lab + browser + ingestion tests | Server replay idempotency covered; no durable browser retry behavior |
+| Site-local visitor rotation | Browser identity scenarios/readme | No focused deterministic timezone-boundary SDK unit test found |
+| 30-minute shared session identity | SDK storage implementation; historical browser baseline | Needs updated deterministic cross-tab/inactivity tests |
 | Aggregate stats/pages/referrers/devices/series | DB tests + independent lab oracle | New reporting APIs not all in lab `readEndpoints`/aggregate checks |
 | Custom events/performance | DB tests | Handler/frontend E2E limited; lab predates new endpoints |
 | Site/date switching | No React tests | Abort/stale/all-or-nothing behavior unprotected |
@@ -96,15 +97,19 @@ On an Apple M4/10 logical CPU/16 GiB, Go 1.25.3, revision `4cf9a78` modified:
 
 Both stored every acknowledged event exactly once and aggregates matched. The report explicitly says this is not a production capacity guarantee (`testing/load/baselines/2026-07-29`).
 
-### Current bottlenecks
+### Historical baseline bottlenecks and current follow-up
 
-1. SQLite write/connection contention: default pool, rollback journal, no busy timeout/WAL; confirmed lock failures.
+1. The 2026-07-29 baseline used a default pool and rollback journal and confirmed
+   lock failures. Current code uses WAL, a five-second busy timeout, one writer,
+   and a four-connection read pool; the same profiles must be rerun for comparison.
 2. Per-request synchronous logging at high ingestion rates.
 3. Best-effort browser enqueue: 1,000 immediate events produced only 270 actual events in baseline, so client delivery fails before server capacity.
-4. Query expressions and missing compound indexes.
+4. Raw analytical scans and in-memory aggregation remain, although current time
+   predicates use integer microseconds and compound indexes.
 5. In-memory referrer/vital/page aggregation and sorting.
 6. Repeated dashboard queries and Sites N+1.
-7. Ever-growing single table/no retention.
+7. Retention now runs daily, but large deletions, WAL checkpointing, backup
+   scheduling, and space reclamation remain operational work.
 8. Dashboard bundle and eager charting.
 
 ### Scaling path (estimates)
@@ -116,7 +121,11 @@ Assumptions: one server, local SSD, properly mounted SQLite, current code, traff
 - **Thousands of active visitors:** burst rate, many single Beacon requests, lock errors, log I/O, and unindexed scans become material. Batch configuration and storage growth matter.
 - **Much larger scale:** one process/file is a write and availability boundary; read scans compete with writes, backup/retention becomes expensive, and horizontal replicas cannot safely share ordinary local SQLite.
 
-Do not jump immediately to distributed services. First: define contract; validate/batch/idempotency; bound SQLite connections; WAL/busy timeout; compound indexes based on plans; sample logs; retention; observability; publish measured envelope. Consider a server DB/queue only when measured workload, multi-instance availability, or operations require it.
+Do not jump immediately to distributed services. The v2 contract now provides
+validation, idempotency, registered sites, WAL, bounded connections, compound
+indexes, projections, and retention. Rerun compatible baselines, improve browser
+delivery and observability, and publish the measured envelope. Consider a server
+DB/queue only when workload, multi-instance availability, or operations require it.
 
 ### Single points/state
 
@@ -134,7 +143,8 @@ Do not jump immediately to distributed services. First: define contract; validat
 - Small, traceable codebase using standard Go HTTP and repository interface.
 - Parameterized SQL and context-aware database methods.
 - Atomic batch insert.
-- Server-owned UUID/ingestion time avoids trusting those client fields, although it blocks idempotency/occurrence semantics.
+- Separate client event ID/occurrence time and server receive time provide
+  idempotency while preserving delivery timing.
 - Deep-copy property truncation avoids caller mutation (commit `3291446`).
 - AbortController mitigates stale overview requests.
 - Exceptionally strong deterministic reliability/fault/browser evidence and CI aggregation.
@@ -166,8 +176,9 @@ Do not jump immediately to distributed services. First: define contract; validat
 
 - constructing Transport can start timers/add listeners;
 - `start()` mutates global `history.pushState`;
-- server startup can mutate schema and, in lab mode, DB max pages;
-- `/api/sites` changes solely because any event is inserted;
+- server startup applies versioned migrations, starts projections/retention, and,
+  in lab mode, can mutate DB max pages;
+- `POST /api/sites` mutates the registered control plane with an admin token;
 - date preset semantics depend on operator timezone;
 - marketing content makes unsupported product/legal claims.
 
@@ -177,15 +188,15 @@ No circular imports were identified. React components import `DATE_PRESETS` from
 
 | ID/type | Evidence/impact | Risk/urgency/difficulty | Recommendation |
 |---|---|---|---|
-| TD-01 Security bug | no auth/authorization | Critical / now / high | Formal ADR then identity + per-site read controls |
-| TD-02 Security/abuse | arbitrary ingestion/site spoofing/rate | Critical / now / high | site registry, scoped ingestion, validation, quotas |
+| TD-01 Security bug | only site mutation is authenticated | Critical / now / high | identity and per-site read/ingest controls |
+| TD-02 Security/abuse | public ingest IDs and no quotas/rate limit | High / now / high | scoped ingest credentials and quotas |
 | TD-03 Reliability bug | browser baseline 16 failures | High / now / high | roadmap v0.3 delivery contract/idempotency |
-| TD-04 Data architecture | no migrations; startup DDL | High / before schema change / medium | versioned migration tool and old-schema fixtures |
-| TD-05 Operations | no shutdown/timeouts/health | High / before production / medium | explicit server, signals, probes |
-| TD-06 Performance | DB defaults/lock failures | High / measured now / medium | pool=bounded, busy/WAL ADR and baseline comparison |
-| TD-07 Privacy | full URL/text/properties/logs | High / now / medium | safe defaults/redaction/data policy |
-| TD-08 Contract | no field validation/idempotency/version | High / now / high | JSON schema/validation and event ID/time fields |
-| TD-09 Backup/retention | only lab proof, no schedule | High / before valuable data / medium | RPO/RTO, automated encrypted backups/restore drills |
+| TD-04 Data architecture | v2 migration exists; future evolution policy still young | Medium / next change / medium | add numbered migrations and more old-schema fixtures |
+| TD-05 Operations | shutdown/timeouts/status added; no readiness distinction | Medium / before production / medium | deployment probes and operational tests |
+| TD-06 Performance | WAL/bounded pools added after historical lock failures | Medium / measured now / medium | rerun compatible baseline and inspect query plans |
+| TD-07 Privacy | URLs sanitized; text/properties/log metadata remain | High / now / medium | property/click redaction and data policy |
+| TD-08 Contract | v1 validation/idempotency/version implemented | Medium / soon / medium | formal schema and SDK retry behavior |
+| TD-09 Backup/retention | scheduled retention exists; backups remain lab-only | High / before valuable data / medium | RPO/RTO and automated encrypted backups/restore drills |
 | TD-10 Testing | new APIs absent from full oracle | Medium / soon / medium | extend deterministic manifest/checks |
 | TD-11 Frontend reliability | all-or-nothing overview, console errors | Medium / soon / medium | per-widget settled results/error UI/retry |
 | TD-12 UI truth bug | broken SDK snippet; synthetic states | High product / now / low | generate/reuse real SDK examples; label/remove mock data |
@@ -195,8 +206,8 @@ No circular imports were identified. React components import `DATE_PRESETS` from
 | TD-16 Deployment | no image CI/deploy/IaC/digests | Medium / before managed prod / medium | image build/scan/sign and documented promotion |
 | TD-17 Maintainability | unused/tracked generated files/tools | Low / cleanup / low | confirm then remove/ignore in focused change |
 | TD-18 Documentation | five drifting public sources | High product / now / medium | canonical contract, generated excerpts, doc checks |
-| TD-19 Product limitation | no site management/users/export/retention | Deliberate early-stage | do not “fix” until product/security ADRs |
-| TD-20 Date semantics | daily rotation/UTC vs local date presets | Medium correctness / soon / medium | site timezone/time-contract ADR and tests |
+| TD-19 Product limitation | token-protected site API, but no users/export UI | Deliberate early-stage | add only from product/security decisions |
+| TD-20 Date semantics | site-local date windows plus UTC visitor boundary | Medium correctness / soon / medium | document metric meaning and extend tests |
 
 “Leave alone for now”: modular monolith, SQLite, plain `net/http`, local React state, and no distributed queue are reasonable at current demonstrated scope. Revisit based on explicit triggers, not fashion.
 
@@ -213,9 +224,11 @@ No circular imports were identified. React components import `DATE_PRESETS` from
 
 ### Historic database upgrades
 
-- Current schema has site/visitor columns but no migrations. Startup `IF NOT EXISTS` cannot alter old tables.
-- Existing deployments’ creation version/manual changes are unknown.
-- Resolve by inventorying production `PRAGMA table_info/index_list/user_version` read-only and creating migration baselines.
+- Before v2, schema changes edited startup DDL and could not alter an existing
+  table. This is historical risk, not the current mechanism.
+- v2 adds `schema_migrations`, a transactional legacy-event upgrade, and fresh/
+  legacy tests. Unknown manually modified deployments should still be inventoried
+  and backed up before upgrade.
 
 ### CORS intent
 

@@ -29,7 +29,7 @@ func TestCORSMiddlewareAllowsAllOrigins(t *testing.T) {
 	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, OPTIONS" {
 		t.Fatalf("unexpected allow-methods header: got %q", got)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type" {
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Authorization, Content-Type" {
 		t.Fatalf("unexpected allow-headers header: got %q", got)
 	}
 	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
@@ -58,7 +58,7 @@ func TestCORSMiddlewareHandlesPreflight(t *testing.T) {
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://evil.example" {
 		t.Fatalf("unexpected allow-origin header: got %q", got)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type" {
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Authorization, Content-Type" {
 		t.Fatalf("unexpected allow-headers header: got %q", got)
 	}
 }

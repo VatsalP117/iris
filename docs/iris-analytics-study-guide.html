@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Interactive guide to the Iris Analytics v2 data architecture">
+<title>Iris Analytics · v2 Architecture Study Guide</title>
+<style>
+:root{color-scheme:light;--bg:#f5f3ee;--panel:#fffdfa;--ink:#17211d;--muted:#637069;--line:#d8ddd7;--brand:#0e7354;--brand2:#cdebdc;--code:#e8ede9;--warn:#9b5c00;--bad:#a43b35;--shadow:0 14px 40px rgba(20,34,27,.08)}
+[data-theme=dark]{color-scheme:dark;--bg:#101713;--panel:#17211c;--ink:#edf5ef;--muted:#a6b4ac;--line:#33443a;--brand:#72d6ae;--brand2:#1c4435;--code:#24312a;--warn:#ffc266;--bad:#ff8c85;--shadow:none}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.62 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}button{cursor:pointer}a{color:var(--brand)}:focus-visible{outline:3px solid var(--brand);outline-offset:3px}code{background:var(--code);border-radius:.3rem;padding:.08rem .32rem;font-size:.9em}pre{overflow:auto;background:#101b16;color:#e7f8ee;border-radius:.8rem;padding:1rem;font-size:.88rem;line-height:1.55}pre code{background:none;padding:0}.shell{display:grid;grid-template-columns:250px minmax(0,1fr);max-width:1420px;margin:auto}.side{position:sticky;top:0;height:100vh;padding:1.4rem 1rem;border-right:1px solid var(--line);overflow:auto}.side .mark{font-weight:850;letter-spacing:-.03em;font-size:1.3rem}.side nav{display:grid;gap:.15rem;margin-top:1.2rem}.side a{color:var(--muted);text-decoration:none;padding:.35rem .55rem;border-radius:.4rem;font-size:.9rem}.side a:hover,.side a:focus{color:var(--ink);background:var(--code)}main{min-width:0;padding:2rem clamp(1.2rem,4vw,4.5rem) 5rem}.toolbar{display:flex;gap:.6rem;justify-content:flex-end;flex-wrap:wrap}.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:.55rem;padding:.45rem .75rem}.hero{padding:4.5rem 0 3rem}.eyebrow{color:var(--brand);font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.13em}.hero h1{font-size:clamp(2.4rem,6vw,5.5rem);line-height:.98;letter-spacing:-.06em;max-width:900px;margin:.5rem 0 1.2rem}.lede{font-size:1.16rem;max-width:820px;color:var(--muted)}.chips{display:flex;gap:.45rem;flex-wrap:wrap;margin-top:1.5rem}.chip{border:1px solid var(--line);border-radius:99px;padding:.3rem .65rem;font-size:.82rem;background:var(--panel)}section{scroll-margin-top:1rem;padding:3.2rem 0;border-top:1px solid var(--line)}h2{font-size:clamp(1.8rem,4vw,3.1rem);line-height:1.05;letter-spacing:-.045em;margin:.35rem 0 1.3rem}h3{margin-top:2rem;line-height:1.25}h4{margin:.1rem 0 .35rem}.muted{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}.card,.note,.recall,.stepper{background:var(--panel);border:1px solid var(--line);border-radius:.85rem;padding:1rem;box-shadow:var(--shadow)}.card p:last-child{margin-bottom:0}.note{border-left:5px solid var(--brand);margin:1rem 0}.note.warn{border-left-color:var(--warn)}.note.bad{border-left-color:var(--bad)}.flow{display:flex;align-items:stretch;gap:.45rem;overflow:auto;padding:.6rem 0}.node{min-width:145px;background:var(--panel);border:1px solid var(--line);border-radius:.7rem;padding:.8rem}.arrow{align-self:center;color:var(--brand);font-weight:900}.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:.75rem}table{border-collapse:collapse;width:100%;min-width:680px;background:var(--panel)}th,td{text-align:left;vertical-align:top;padding:.72rem;border-bottom:1px solid var(--line)}th{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}tr:last-child td{border-bottom:0}.step{display:none}.step.active{display:block}.stepnav{display:flex;justify-content:space-between;gap:.5rem;margin-top:1rem}.dots{display:flex;gap:.3rem;margin-bottom:.8rem}.dot{width:1.8rem;height:1.8rem;border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--muted)}.dot.active{background:var(--brand);color:var(--bg);border-color:var(--brand)}.recall{margin:.7rem 0}.recall-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}.answer{display:none;border-top:1px solid var(--line);margin-top:.8rem;padding-top:.8rem}.answer.show{display:block}.search{width:min(440px,100%);background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:.55rem;padding:.55rem .7rem}.hidden{display:none!important}.check{display:flex;gap:.65rem;align-items:flex-start;padding:.45rem 0}.check input{margin-top:.35rem;accent-color:var(--brand)}.check.done label{text-decoration:line-through;color:var(--muted)}.schema{font-size:.88rem}.legend{display:flex;gap:1rem;flex-wrap:wrap;color:var(--muted);font-size:.84rem}.swatch{display:inline-block;width:.7rem;height:.7rem;border-radius:50%;margin-right:.25rem;background:var(--brand)}.swatch.raw{background:#ca6846}.swatch.derived{background:#577fc4}.footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--muted);font-size:.85rem}
+@media(max-width:900px){.shell{display:block}.side{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}.side nav{display:flex;overflow:auto}.side a{white-space:nowrap}.grid,.grid.two{grid-template-columns:1fr}.hero{padding-top:2.5rem}}
+@media print{.side,.toolbar,.stepnav,.reveal{display:none!important}.shell{display:block}main{padding:.2in}.answer,.step{display:block!important}section{break-inside:auto}.card,.recall,.note{box-shadow:none;break-inside:avoid}body{background:white;color:black}a{color:black}}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside class="side" aria-label="Guide navigation">
+  <div class="mark">◉ Iris / v2</div>
+  <div class="muted">Architecture study guide</div>
+  <nav>
+    <a href="#model">Mental model</a><a href="#flow">Event journey</a><a href="#contract">Wire contract</a>
+    <a href="#storage">Storage model</a><a href="#projection">Projections</a><a href="#identity">Identity & time</a>
+    <a href="#runtime">SQLite runtime</a><a href="#security">Security</a><a href="#operations">Operations</a>
+    <a href="#scale">Scaling decision</a><a href="#release">SDK release</a><a href="#quiz">Recall</a>
+  </nav>
+</aside>
+<main>
+<div class="toolbar">
+  <label><span class="muted">Search </span><input id="search" class="search" type="search" placeholder="projection, retention, event ID…"></label>
+  <button class="btn" id="theme" type="button">Toggle theme</button>
+  <button class="btn" id="print" type="button">Print / PDF</button>
+</div>
+
+<header class="hero" data-search>
+  <div class="eyebrow">Iris Analytics · long-term data architecture</div>
+  <h1>Raw facts stay true. Every dashboard view can be rebuilt.</h1>
+  <p class="lede">Iris v2 keeps the operational simplicity of one SQLite database while separating registered sites, immutable event facts, and disposable analytical projections. This guide explains the invariants, failure boundaries, and the signals that justify a future database split.</p>
+  <div class="chips"><span class="chip">Evidence: <code>codex/v2-data-architecture</code></span><span class="chip">Updated 2026-08-09</span><span class="chip">SDK source version 1.0.0</span><span class="chip">Self-contained & offline</span></div>
+</header>
+
+<section id="model" data-search>
+  <div class="eyebrow">01 · Mental model</div><h2>It is still one database, but no longer one table.</h2>
+  <div class="grid">
+    <article class="card"><h3>Control plane</h3><p><code>sites</code>, <code>site_domains</code>, and reserved <code>ingest_keys</code> describe who may send data and how that data is interpreted.</p></article>
+    <article class="card"><h3>Raw fact log</h3><p><code>events</code> is append-only application data. An accepted event is durable here before Iris returns <code>202</code>.</p></article>
+    <article class="card"><h3>Read models</h3><p>Sessions and daily aggregates are derived. If their meaning changes or they become corrupt, clear them and replay raw events.</p></article>
+  </div>
+  <div class="note"><strong>The governing invariant</strong><br>An accepted event is durable in <code>events</code>. Projection lag may delay a dashboard update, but it never changes whether ingestion succeeded.</div>
+  <h3>Why this is the long-term shape</h3>
+  <p>The old single-table approach was attractive while every query was a small scan. It coupled ingestion, site discovery, identity semantics, and reporting to the same rows. V2 introduces explicit ownership and derivation boundaries without paying the deployment cost of Kafka, Redis, PostgreSQL, or ClickHouse. The logical boundary—not SQLite—is the valuable architecture.</p>
+  <div class="grid two">
+    <div class="card"><h3>Durable vs rebuildable</h3><p class="muted">Raw events are backed up and retained deliberately. Projections are versioned caches of meaning.</p></div>
+    <div class="card"><h3>Public vs secret</h3><p class="muted">Site IDs and browser ingest identifiers are public. The admin bearer token is server-side only.</p></div>
+    <div class="card"><h3>Occurrence vs receipt</h3><p class="muted">Both client occurrence time and server receive time are stored as integer UTC microseconds.</p></div>
+    <div class="card"><h3>Site-local vs UTC</h3><p class="muted">Instants are UTC; calendar grouping and visitor rotation use the registered IANA timezone.</p></div>
+  </div>
+</section>
+
+<section id="flow" data-search>
+  <div class="eyebrow">02 · Event journey</div><h2>One pageview crosses two transactions and one checkpoint.</h2>
+  <div class="flow" aria-label="Event flow">
+    <div class="node"><b>Browser SDK</b><br><span class="muted">identity + event ID</span></div><div class="arrow">→</div>
+    <div class="node"><b>API validation</b><br><span class="muted">site, domain, time, URL</span></div><div class="arrow">→</div>
+    <div class="node"><b>Raw transaction</b><br><span class="muted">append or dedupe</span></div><div class="arrow">→</div>
+    <div class="node"><b>202 Accepted</b><br><span class="muted">durability boundary</span></div><div class="arrow">→</div>
+    <div class="node"><b>Projector</b><br><span class="muted">ordered by seq</span></div><div class="arrow">→</div>
+    <div class="node"><b>Read models</b><br><span class="muted">sessions + daily</span></div>
+  </div>
+  <div class="stepper" data-stepper>
+    <div class="dots"></div>
+    <div class="step active"><h3>1 · SDK constructs the event</h3><p>It creates a stable UUID event ID, records occurrence time, includes wire version <code>v</code> and SDK version <code>sv</code>, then resolves site-scoped visitor and session IDs.</p></div>
+    <div class="step"><h3>2 · API validates meaning</h3><p>The handler enforces method and size, decodes one event or a maximum of 50, requires stable identifiers, validates the registered site and hostname, normalizes URLs, and derives the site-local day.</p></div>
+    <div class="step"><h3>3 · Serialized writer commits raw facts</h3><p>The event receives monotonic <code>seq</code>. A duplicate <code>id</code> uses conflict-do-nothing, making retries safe. A batch is atomic.</p></div>
+    <div class="step"><h3>4 · The client receives 202</h3><p><code>202</code> means the raw SQLite transaction committed. It does not promise that the projector has caught up or that every downstream chart has refreshed.</p></div>
+    <div class="step"><h3>5 · Projector advances atomically</h3><p>Every 250 ms it reads at most 1,000 events after the checkpoint, updates daily sets/metrics and affected sessions, then advances the checkpoint in the same transaction.</p></div>
+    <div class="step"><h3>6 · Reads choose the correct source</h3><p>Eligible complete-day queries use projections. Exact, partial-day, or not-yet-projected answers may use raw events. <code>/api/status</code> exposes the gap.</p></div>
+    <div class="stepnav"><button class="btn prev" type="button">← Previous</button><button class="btn next" type="button">Next →</button></div>
+  </div>
+</section>
+
+<section id="contract" data-search>
+  <div class="eyebrow">03 · Wire contract</div><h2>Event identity makes retries safe; normalization minimizes what is stored.</h2>
+<pre><code>{
+  "id": "4a8c7ff0-8ace-4b2c-9c32-c9723b408623",
+  "n": "$pageview",
+  "u": "https://docs.example.com/guide?campaign=private#install",
+  "d": "docs.example.com",
+  "r": "https://search.example/results?q=iris",
+  "w": 1440, "s": "docs", "sid": "session-uuid", "vid": "visitor-uuid",
+  "p": {}, "ts": "2026-08-09T10:30:00.000Z", "v": 1, "sv": "1.0.0"
+}</code></pre>
+  <div class="tablewrap"><table><thead><tr><th>Field</th><th>Responsibility</th><th>Important rule</th></tr></thead><tbody>
+    <tr><td><code>id</code></td><td>Client idempotency key</td><td>Unique; duplicate delivery succeeds without a second row</td></tr>
+    <tr><td><code>ts</code></td><td>Occurrence time</td><td>ISO 8601; cannot be more than five minutes in the future; omission falls back to receive time</td></tr>
+    <tr><td><code>v</code></td><td>Wire schema version</td><td>Omitted means 1; unsupported versions are rejected</td></tr>
+    <tr><td><code>sv</code></td><td>Producing SDK version</td><td>Optional, at most 64 characters</td></tr>
+    <tr><td><code>s</code>, <code>d</code>, <code>u</code></td><td>Site and origin</td><td>Site must exist; URL hostname must be allowed; supplied domain must agree with URL</td></tr>
+    <tr><td><code>sid</code>, <code>vid</code></td><td>Anonymous analytics identity</td><td>Required, site-scoped, and bounded—not proof of a person</td></tr>
+  </tbody></table></div>
+  <div class="note"><strong>Stored form:</strong> only absolute HTTP(S) URLs without userinfo are accepted. Scheme and host are lowercased; query and fragment are removed; empty path becomes <code>/</code>. The example stores <code>https://docs.example.com/guide</code> and typed pathname <code>/guide</code>.</div>
+  <p>Reserved names are <code>$pageview</code>, <code>$click</code>, and <code>$web_vital</code>. Custom names cannot start with <code>$</code>. Recursive string property values are capped at 200 characters. Stable, frequently filtered dimensions should graduate to typed columns—not an EAV table.</p>
+</section>
+
+<section id="storage" data-search>
+  <div class="eyebrow">04 · Storage</div><h2>Three layers, twelve tables, one source of truth.</h2>
+  <div class="legend"><span><i class="swatch"></i>control plane</span><span><i class="swatch raw"></i>raw fact</span><span><i class="swatch derived"></i>derived</span></div>
+  <div class="tablewrap schema"><table><thead><tr><th>Layer</th><th>Tables</th><th>Purpose</th></tr></thead><tbody>
+    <tr><td>Control</td><td><code>sites</code>, <code>site_domains</code>, <code>ingest_keys</code></td><td>Stable ownership, timezone, retention, disable state, hostname allowlist; future hashed/revocable ingest credentials</td></tr>
+    <tr><td>Raw</td><td><code>events</code></td><td>Append-only source of truth with <code>seq</code>, unique <code>id</code>, two timestamps, normalized dimensions, <code>local_day</code>, wire metadata, JSON properties</td></tr>
+    <tr><td>Derived</td><td><code>sessions</code>, <code>daily_site_metrics</code>, <code>daily_page_metrics</code>, <code>daily_referrer_visitors</code>, <code>daily_visitors</code>, <code>daily_sessions</code>, <code>projection_checkpoints</code></td><td>Fast dashboard reads, exact daily distinct sets, and resumable/versioned projection progress</td></tr>
+    <tr><td>Metadata</td><td><code>schema_migrations</code></td><td>Records transactionally applied embedded migration versions</td></tr>
+  </tbody></table></div>
+  <h3>Why not put everything in one JSON event table?</h3>
+  <p>Raw JSON is flexible but poor at ownership constraints, uniqueness, referential integrity, stable filter performance, and explicit lifecycle policy. V2 keeps flexible custom properties in JSON while moving durable concepts—site, domain, occurrence, pathname, session, visitor, version—into typed columns.</p>
+  <h3>Why not fully normalize custom properties?</h3>
+  <p>An entity-attribute-value model turns every analytical filter into joins and loses useful type guarantees. Iris instead uses a hybrid rule: JSON for the long tail, typed columns and migrations for dimensions that become stable product concepts.</p>
+</section>
+
+<section id="projection" data-search>
+  <div class="eyebrow">05 · Projection semantics</div><h2>A checkpoint is only trustworthy when it commits with its derived writes.</h2>
+  <div class="grid two">
+    <article class="card"><h3>Ordering</h3><p>Raw <code>seq</code>, not occurrence time, defines replay order. Sessions touched in a batch are recomputed from their raw events through the batch’s final sequence, handling late occurrence times.</p></article>
+    <article class="card"><h3>Atomicity</h3><p>Derived updates and checkpoint advance share one transaction. A failed batch rolls back both, so retrying cannot double-count.</p></article>
+    <article class="card"><h3>Versioning</h3><p>A projection-version mismatch triggers a rebuild before HTTP serving. Projection-backed reads also verify the expected version.</p></article>
+    <article class="card"><h3>Repair</h3><p><code>iris-server rebuild-projections</code> clears derived state only, resets the checkpoint, and replays the complete retained raw log.</p></article>
+  </div>
+  <div class="note warn"><strong>Do not “fix” a chart by updating raw events.</strong> Correct projection logic, bump its version, rebuild, and verify. Delete raw facts only for explicit retention or privacy operations.</div>
+  <h3>Projection lag formula</h3>
+  <pre><code>projection_lag = last_raw_seq - projection_last_seq</code></pre>
+  <p>Lag above zero can be normal for roughly one polling interval. Persistently growing lag means the projector cannot keep pace or is failing. Raw durability remains intact, but projection freshness does not.</p>
+</section>
+
+<section id="identity" data-search>
+  <div class="eyebrow">06 · Identity & time</div><h2>Privacy and calendar semantics now share one site timezone.</h2>
+  <div class="grid">
+    <article class="card"><h3>Visitor</h3><p>A browser-local random ID scoped to the site. It rotates at midnight in the registered IANA timezone. It is not a user or person identifier.</p></article>
+    <article class="card"><h3>Session</h3><p>A site-scoped ID in <code>localStorage</code>, shared by same-origin tabs, rolling after 30 minutes without tracked activity.</p></article>
+    <article class="card"><h3>Local day</h3><p>Derived from occurrence time at ingestion and stored on every event. Daily projections group by this stable value.</p></article>
+  </div>
+  <p>The SDK <code>timezone</code> must match the registered site. Once the first event exists, Iris rejects timezone changes: otherwise historical rows, future visitor rotation, and daily charts would silently use incompatible definitions.</p>
+  <div class="note"><strong>Interpretation:</strong> a seven-day “visitors” query may count one active browser up to seven times because its visitor ID intentionally rotates daily. Session counts represent 30-minute inactivity windows as observed by this browser SDK, not authenticated people.</div>
+</section>
+
+<section id="runtime" data-search>
+  <div class="eyebrow">07 · SQLite runtime</div><h2>One serialized writer, four readers, WAL between them.</h2>
+  <div class="flow"><div class="node"><b>HTTP + maintenance</b></div><div class="arrow">→</div><div class="node"><b>Writer pool</b><br><span class="muted">MaxOpenConns(1)</span></div><div class="arrow">→</div><div class="node"><b>SQLite WAL</b></div><div class="arrow">←</div><div class="node"><b>Read pool</b><br><span class="muted">up to 4</span></div><div class="arrow">←</div><div class="node"><b>Dashboard reads</b></div></div>
+  <div class="grid two">
+    <div class="card"><h3>Per-connection rules</h3><p><code>foreign_keys=ON</code>, WAL journal, five-second busy timeout, <code>synchronous=NORMAL</code>.</p></div>
+    <div class="card"><h3>Writer ownership</h3><p>Ingestion, site mutation, migration, projection, and retention all serialize through the writer.</p></div>
+    <div class="card"><h3>Benefit</h3><p>Readers can continue during commits and competing Go write connections no longer manufacture lock contention.</p></div>
+    <div class="card"><h3>Limit</h3><p>SQLite is still single-writer. Long retention deletes or migrations can delay ingestion; WAL growth and long readers need monitoring.</p></div>
+  </div>
+</section>
+
+<section id="security" data-search>
+  <div class="eyebrow">08 · Trust model</div><h2>Registration adds integrity. It does not complete authorization.</h2>
+  <div class="tablewrap"><table><thead><tr><th>Surface</th><th>Current protection</th><th>What remains</th></tr></thead><tbody>
+    <tr><td><code>POST /api/sites</code></td><td><code>Authorization: Bearer IRIS_ADMIN_TOKEN</code>; disabled with 503 if unset</td><td>Token rotation/audit and eventually user/site-scoped administration</td></tr>
+    <tr><td>Event ingestion</td><td>Known site + registered hostname + validation + idempotency</td><td>Unauthenticated; hostname and site ID are public and forgeable outside browsers; add scoped ingest credentials/rate limits if exposed</td></tr>
+    <tr><td>Sites and analytics reads</td><td>None in the application</td><td>Authentication and per-site authorization before multi-user/public use</td></tr>
+    <tr><td>Stored URLs</td><td>Query/fragment removal and HTTP(S)-only normalization</td><td>Custom properties and paths can still contain sensitive data; establish collection policy</td></tr>
+  </tbody></table></div>
+  <div class="note bad"><strong>Do not confuse CORS, origin checking, or an unguessable site ID with authentication.</strong> CORS constrains cooperating browsers; non-browser clients can forge headers. The reserved <code>ingest_keys</code> table exists so a future design can add hashed, revocable credentials without embedding the admin token in the SDK.</div>
+</section>
+
+<section id="operations" data-search>
+  <div class="eyebrow">09 · Operations</div><h2>Migrate, project, retain, observe, and shut down deliberately.</h2>
+  <div class="grid two">
+    <article class="card"><h3>Versioned migrations</h3><p>Embedded numbered SQL files run transactionally and record in <code>schema_migrations</code>. Never edit a released migration; append a new one and test fresh plus upgrade paths.</p></article>
+    <article class="card"><h3>Legacy upgrade</h3><p>Pre-v2 <code>events</code> is renamed, v2 tables are created, sites/domains inferred, URLs sanitized, timestamps copied, then the temporary table is dropped in one transaction.</p></article>
+    <article class="card"><h3>Retention</h3><p>Per-site <code>retention_days</code> runs at startup and every 24 hours. It deletes expired raw/daily data and rebuilds sessions crossing the cutoff.</p></article>
+    <article class="card"><h3>Lifecycle</h3><p>The server drains projections at startup, serves status at <code>/api/status</code> and <code>/healthz</code>, and uses signal-driven graceful shutdown.</p></article>
+  </div>
+<pre><code># inspect durability and freshness
+curl http://localhost:8080/api/status
+
+# explicit maintenance, using the same DB_PATH
+iris-server rebuild-projections
+iris-server apply-retention</code></pre>
+  <h3>Signals that matter</h3>
+  <p>Backups and restore drills; raw sequence and projection checkpoint; DB and WAL size; ingestion latency; busy/locked errors; retention duration and rows deleted. A SQLite-aware backup must preserve a consistent database/WAL state.</p>
+  <div class="note warn"><strong>Known maintenance limit:</strong> retention does not yet batch large deletes, checkpoint WAL, reclaim file space, or report granular progress. Add those before delete volume can hold the single writer for a material period.</div>
+</section>
+
+<section id="scale" data-search>
+  <div class="eyebrow">10 · Evolution</div><h2>Move to ClickHouse when measurements demand it—not when the table feels large.</h2>
+  <div class="grid two">
+    <div class="card"><h3>Stay on SQLite when…</h3><p>A single node is acceptable, the serialized writer sustains peaks, projection lag remains bounded, indexed/projection reads meet goals, and retention is operationally cheap.</p></div>
+    <div class="card"><h3>Split storage when…</h3><p>You need concurrent ingestion replicas, sustained writes exceed one writer after batching, long-range segmentation misses targets, event volume reaches hundreds of millions, or retention/compression dominates operations.</p></div>
+  </div>
+  <p>The likely split keeps relational control-plane data in SQLite or PostgreSQL and sends event facts/analytical models to ClickHouse. Because v2 already treats raw events as a logical stream and projections as consumers, that migration need not change the browser event contract.</p>
+  <div class="note"><strong>Architecture heuristic:</strong> optimize the seam before replacing the engine. Stable event IDs, explicit schema versions, projection checkpoints, immutable facts, and registered sites retain value under every future store.</div>
+</section>
+
+<section id="release" data-search>
+  <div class="eyebrow">11 · SDK release</div><h2>The timezone and identity changes are a minor SDK release.</h2>
+  <p>The shipped SDK gains an optional public <code>timezone</code> configuration and changes visitor/session behavior to the v2 contract. The repository uses Changesets and npm Trusted Publishing; normal releases never run <code>npm publish</code> from a developer machine.</p>
+  <ol>
+    <li>Add a <strong>minor</strong> changeset to this SDK PR and verify the build/package.</li>
+    <li>Merge the implementation PR into <code>main</code>.</li>
+    <li>The <strong>Release SDK</strong> workflow creates or updates <code>chore: release packages</code>, consuming changesets and updating the package version/changelog.</li>
+    <li>Review and merge that release PR, then approve the <code>npm-production</code> environment deployment.</li>
+    <li>GitHub OIDC publishes to npm and creates the matching tag/release; verify <code>latest</code> and package integrity.</li>
+  </ol>
+  <div class="note warn"><strong>Why the current PR cannot immediately publish:</strong> the canonical publish trigger is the release PR merge into <code>main</code>, followed by a manual production approval. This implementation PR prepares the version intent; publication happens only after review and merge.</div>
+</section>
+
+<section id="quiz" data-search>
+  <div class="eyebrow">12 · Retrieval practice</div><h2>Answer first. Reveal second.</h2>
+  <div class="recall"><div class="recall-head"><strong>1. What exact event state does a 202 response guarantee?</strong><button class="btn reveal" type="button">Reveal</button></div><div class="answer">The raw-event transaction committed, or the same event ID was already present. It does not guarantee zero projection lag or a refreshed dashboard.</div></div>
+  <div class="recall"><div class="recall-head"><strong>2. Why must checkpoint advancement share the projection transaction?</strong><button class="btn reveal" type="button">Reveal</button></div><div class="answer">If it advanced separately, a crash could mark uncommitted work complete or replay already-committed increments. One transaction makes the batch restartable without gaps or double counts.</div></div>
+  <div class="recall"><div class="recall-head"><strong>3. Which identifier orders projection work, and which deduplicates delivery?</strong><button class="btn reveal" type="button">Reveal</button></div><div class="answer"><code>seq</code> provides database order; client-generated <code>id</code> is the unique idempotency key.</div></div>
+  <div class="recall"><div class="recall-head"><strong>4. Why is site timezone immutable after the first event?</strong><button class="btn reveal" type="button">Reveal</button></div><div class="answer">It determines stored <code>local_day</code>, visitor rotation, and daily projections. Changing it would mix incompatible historical and future calendar semantics.</div></div>
+  <div class="recall"><div class="recall-head"><strong>5. Are sessions still tab-lifetime IDs?</strong><button class="btn reveal" type="button">Reveal</button></div><div class="answer">No. They are site-scoped, shared across same-origin tabs through localStorage, and roll after 30 minutes without tracked activity.</div></div>
+  <div class="recall"><div class="recall-head"><strong>6. Can a forged Origin header bypass ingestion authentication?</strong><button class="btn reveal" type="button">Reveal</button></div><div class="answer">There is currently no ingestion authentication to bypass. Hostname validation improves data integrity but does not prove the sender; a non-browser client can forge headers and payloads.</div></div>
+  <div class="recall"><div class="recall-head"><strong>7. Which data may be safely deleted and regenerated?</strong><button class="btn reveal" type="button">Reveal</button></div><div class="answer">Sessions, daily aggregates/distinct sets, and projection checkpoints. The retained raw <code>events</code> log is the rebuild source.</div></div>
+  <div class="recall"><div class="recall-head"><strong>8. What happens when a duplicate event ID is retried?</strong><button class="btn reveal" type="button">Reveal</button></div><div class="answer">The insert conflicts and does nothing; the request remains accepted without creating another raw row.</div></div>
+  <div class="recall"><div class="recall-head"><strong>9. Why are URL query strings removed?</strong><button class="btn reveal" type="button">Reveal</button></div><div class="answer">They frequently contain tokens, search text, email addresses, and campaign details. Removing query/fragment minimizes privacy leakage and reduces high-cardinality dimensions.</div></div>
+  <div class="recall"><div class="recall-head"><strong>10. When does ClickHouse become justified?</strong><button class="btn reveal" type="button">Reveal</button></div><div class="answer">When measured write throughput, multi-replica requirements, analytical latency, hundreds-of-millions scale, retention cost, or unbounded projection lag exceed the single-node SQLite envelope after reasonable tuning.</div></div>
+  <h3>Spaced review checklist</h3>
+  <div class="check"><input type="checkbox" data-key="model" id="c1"><label for="c1">Draw control plane → raw facts → projections from memory.</label></div>
+  <div class="check"><input type="checkbox" data-key="journey" id="c2"><label for="c2">Trace the six-step event journey and mark both transaction boundaries.</label></div>
+  <div class="check"><input type="checkbox" data-key="time" id="c3"><label for="c3">Explain occurrence time, receive time, UTC storage, site-local day, visitor rotation, and session timeout.</label></div>
+  <div class="check"><input type="checkbox" data-key="repair" id="c4"><label for="c4">Explain how a projection-version bug is repaired without mutating raw facts.</label></div>
+  <div class="check"><input type="checkbox" data-key="trust" id="c5"><label for="c5">Separate site administration, ingestion integrity, read authorization, and CORS.</label></div>
+  <div class="check"><input type="checkbox" data-key="ops" id="c6"><label for="c6">Recite the status, rebuild, retention, backup, and release workflows.</label></div>
+</section>
+
+<footer class="footer">Built from <code>docs/09_V2_DATA_ARCHITECTURE.md</code>, <code>docs/RELEASING.md</code>, and the implementation on <code>codex/v2-data-architecture</code>. Answers expand automatically when printing.</footer>
+</main></div>
+<script>
+(function(){
+  "use strict";
+  var root=document.documentElement;
+  try{var saved=localStorage.getItem("iris-guide-theme");if(saved)root.dataset.theme=saved}catch(e){}
+  document.getElementById("theme").addEventListener("click",function(){var dark=root.dataset.theme==="dark";root.dataset.theme=dark?"light":"dark";try{localStorage.setItem("iris-guide-theme",root.dataset.theme)}catch(e){}});
+  function expand(){document.querySelectorAll(".answer").forEach(function(x){x.classList.add("show")});document.querySelectorAll(".step").forEach(function(x){x.classList.add("active")})}
+  document.getElementById("print").addEventListener("click",function(){expand();window.print()});window.addEventListener("beforeprint",expand);
+  document.getElementById("search").addEventListener("input",function(e){var q=e.target.value.trim().toLowerCase();document.querySelectorAll("[data-search]").forEach(function(x){x.classList.toggle("hidden",q!==""&&!x.textContent.toLowerCase().includes(q))})});
+  document.querySelectorAll(".reveal").forEach(function(b){b.setAttribute("aria-expanded","false");b.addEventListener("click",function(){var a=b.closest(".recall").querySelector(".answer");var show=!a.classList.contains("show");a.classList.toggle("show",show);b.setAttribute("aria-expanded",String(show));b.textContent=show?"Hide":"Reveal"})});
+  document.querySelectorAll("[data-stepper]").forEach(function(box){var steps=Array.from(box.querySelectorAll(".step"));var dots=box.querySelector(".dots");var i=0;function draw(){steps.forEach(function(s,n){s.classList.toggle("active",n===i)});Array.from(dots.children).forEach(function(d,n){d.classList.toggle("active",n===i);d.setAttribute("aria-current",n===i?"step":"false")})}steps.forEach(function(_,n){var d=document.createElement("button");d.type="button";d.className="dot";d.textContent=String(n+1);d.setAttribute("aria-label","Show step "+(n+1));d.addEventListener("click",function(){i=n;draw()});dots.appendChild(d)});box.querySelector(".prev").addEventListener("click",function(){i=(i-1+steps.length)%steps.length;draw()});box.querySelector(".next").addEventListener("click",function(){i=(i+1)%steps.length;draw()});draw()});
+  document.querySelectorAll(".check input").forEach(function(c){var key="iris-v2-study:"+c.dataset.key;try{c.checked=localStorage.getItem(key)==="1"}catch(e){}function paint(){c.closest(".check").classList.toggle("done",c.checked)}paint();c.addEventListener("change",function(){paint();try{localStorage.setItem(key,c.checked?"1":"0")}catch(e){}})});
+})();
+</script>
+</body>
+</html>

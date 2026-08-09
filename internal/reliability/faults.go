@@ -161,6 +161,17 @@ func faultLoadConfig(config FaultSuiteConfig, server *LabServer, name string) Co
 	}
 }
 
+func runRegisteredFaultLoad(
+	ctx context.Context,
+	server *LabServer,
+	config Config,
+) (*Report, error) {
+	if err := server.RegisterSite(ctx, config.SiteID); err != nil {
+		return nil, fmt.Errorf("register fault site: %w", err)
+	}
+	return Run(ctx, config)
+}
+
 func runRestartFault(
 	ctx context.Context,
 	config FaultSuiteConfig,
@@ -173,7 +184,7 @@ func runRestartFault(
 		time.Sleep(delay)
 		restartDone <- server.Restart(ctx)
 	}()
-	report, err := Run(ctx, loadConfig)
+	report, err := runRegisteredFaultLoad(ctx, server, loadConfig)
 	restartErr := <-restartDone
 	recovered := restartErr == nil && serverHealthy(ctx, server.URL())
 	return finalizeFaultResult(config.OutputDir, "restart", report, err, recovered, restartErr)
@@ -207,7 +218,7 @@ func runProxyFault(
 		proxy.delay = 25 * time.Millisecond
 	}
 
-	report, runErr := Run(ctx, loadConfig)
+	report, runErr := runRegisteredFaultLoad(ctx, server, loadConfig)
 	recovered := serverHealthy(ctx, server.URL())
 	return finalizeFaultResult(config.OutputDir, name, report, runErr, recovered, nil)
 }
@@ -227,7 +238,7 @@ func runSQLiteLockFault(
 		time.Sleep(loadConfig.Duration / 3)
 		faultDone <- holdExclusiveLock(ctx, server.DBPath, loadConfig.Duration/4)
 	}()
-	report, err := Run(ctx, loadConfig)
+	report, err := runRegisteredFaultLoad(ctx, server, loadConfig)
 	faultErr := <-faultDone
 	recovered := faultErr == nil && serverHealthy(ctx, server.URL())
 	return finalizeFaultResult(config.OutputDir, "sqlite-lock", report, err, recovered, faultErr)
@@ -252,7 +263,7 @@ func runSQLiteDiskLimitFault(
 	defer diskServer.Stop()
 
 	loadConfig := faultLoadConfig(config, diskServer, "sqlite-disk-limit")
-	report, err := Run(ctx, loadConfig)
+	report, err := runRegisteredFaultLoad(ctx, diskServer, loadConfig)
 	stopErr := diskServer.Stop()
 	diskServer.Env = nil
 	restartErr := diskServer.Start(ctx)
@@ -387,7 +398,7 @@ func runBackupVerification(
 	if !config.Quick {
 		loadConfig.Duration = 10 * time.Second
 	}
-	report, err := Run(ctx, loadConfig)
+	report, err := runRegisteredFaultLoad(ctx, server, loadConfig)
 	if err != nil {
 		return BackupResult{Error: err.Error()}
 	}

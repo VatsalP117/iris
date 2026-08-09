@@ -1,309 +1,110 @@
-# Iris Analytics — Complete Architecture Summary
+# Iris Analytics — Architecture Summary
 
-## Overview
+This is the concise system map. The detailed, authoritative data contract is
+[docs/09_V2_DATA_ARCHITECTURE.md](docs/09_V2_DATA_ARCHITECTURE.md), and the
+broader evidence handbook begins at
+[docs/PROJECT_HANDBOOK.md](docs/PROJECT_HANDBOOK.md).
 
-Iris is a **self-hosted, privacy-first web analytics** system. It is made up of three independent but tightly coupled layers:
+## System shape
 
-| Layer | Location | Tech | Role |
+Iris is a self-hosted modular monolith with four repository workspaces:
+
+| Layer | Location | Technology | Responsibility |
 |---|---|---|---|
-| **Client SDK** | `web/` | TypeScript (npm pkg) | Runs in visitor browsers, tracks events |
-| **Backend Server** | `cmd/` + `pkg/` | Go + SQLite | Ingests events, answers queries |
-| **Dashboard UI** | `dashboard/` | React + Vite | Visualises analytics data |
+| Browser SDK | `web/` | TypeScript | Identity, capture, payload construction, delivery |
+| Server | `cmd/server`, `pkg/` | Go `net/http` | Validation, persistence, queries, maintenance |
+| Dashboard | `dashboard/` | React 18 + Vite | Site/date selection and analytics presentation |
+| Marketing | `marketing/` | React 19 + Nginx | Separately deployed public site and docs |
 
-The entire system is packaged as a **single Docker container**. The Go binary serves both the API and the Dashboard's static files on a single port.
-
----
-
-## System Architecture & Data Flow
+The server and dashboard ship together. SQLite is an embedded file on a
+persistent volume; there is no database network service, queue, or separate
+worker process.
 
 ```mermaid
 flowchart LR
-    subgraph "Visitor Browser"
-        SDK["iris-analytics\n(web/src/index.ts)"]
-        LS["localStorage\niris_vid + iris_vid_day"]
-        SS["sessionStorage\niris_sid"]
-    end
-
-    subgraph "Go Server :8080"
-        API["pkg/api/handler.go\nHTTP Handlers"]
-        CORE["pkg/core/event.go\nDomain Types + Interface"]
-        DB["pkg/db/\nsqlite.go + query.go"]
-        STATIC["Static File Server\n/dashboard/dist"]
-    end
-
-    subgraph "SQLite"
-        TBL["events table"]
-    end
-
-    subgraph "Dashboard Browser"
-        DASH["dashboard/src/App.tsx\nReact SPA"]
-    end
-
-    SDK -- "navigator.sendBeacon / fetch\nPOST /api/event (JSON)" --> API
-    SDK --> LS & SS
-    API --> CORE --> DB --> TBL
-    DASH -- "GET /api/stats\nGET /api/pages\nGET /api/referrers\nGET /api/vitals\nGET /api/devices\nGET /api/timeseries" --> API
-    STATIC --> DASH
+    SDK["Browser SDK"] -->|"POST event JSON"| API["Go API"]
+    OP["Dashboard browser"] -->|"GET analytics JSON"| API
+    API --> VALIDATE["Validate site/domain and sanitize"]
+    VALIDATE --> RAW[("Raw events")]
+    RAW --> PROJECTOR["Checkpointed projector"]
+    PROJECTOR --> DERIVED[("Sessions + daily metrics")]
+    CONTROL[("Sites + domains")] --> VALIDATE
+    API --> CONTROL
+    API --> RAW
+    API --> DERIVED
 ```
 
----
-
-## Layer 1: Client SDK (`web/`)
-
-**Package name:** `iris-analytics` (v0.1.0)  
-**Build:** `tsup` → outputs ESM + CJS + `.d.ts` to `web/dist/`
-
-### Files
-
-#### [config.ts](file:///Users/vatsalpatel/Desktop/iris/web/src/config.ts)
-Defines the two public types:
-- **`IrisConfig`** — what the user passes into `new Iris({...})`:
-  - `host` (required): URL of your Iris backend
-  - `siteId` (required): logical site identifier
-  - `autocapture` (default `true`): auto-click tracking toggle
-  - `debug` (default `false`): console logging toggle
-- **`EventPayload`** — the JSON shape sent to `/api/event` (short keys to minimise wire size)
-
-#### [storage.ts](file:///Users/vatsalpatel/Desktop/iris/web/src/storage.ts)
-Identity layer — **fully anonymous**, no cookies.
-- **Visitor ID (`iris_vid`)** → `localStorage` — rotates once per UTC day (`iris_vid_day`), stays stable within that day
-- **Session ID (`iris_sid`)** → `sessionStorage` — unique per browser tab/session, cleared on tab close
-- Falls back to a UUID v4 polyfill for old environments
-
-#### [transport.ts](file:///Users/vatsalpatel/Desktop/iris/web/src/transport.ts)
-Sends the `EventPayload` to `{host}/api/event`:
-1. Prefers `navigator.sendBeacon` (fire-and-forget, survives page unloads)
-2. Falls back to `fetch` with `keepalive: true`
-> String payload is wrapped as `Blob` for sendBeacon, since it needs a specific content-type
-
-#### [autocapture.ts](file:///Users/vatsalpatel/Desktop/iris/web/src/autocapture.ts)
-Captures `$click` events automatically. Listens on `window` with `capture: true` (catches events before they bubble). Targets: `button`, `a`, `input[type=submit]`, `[role=button]`. Respects:
-- `.iris-ignore` class → skip element
-- `input[type=password]` → never captured (privacy)
-
-Recorded properties per click: `$tag`, `$id`, `$class`, `$text` (first 50 chars), `$href` (links only).
-
-> ⚠️ Marked as **WIP** — the comment says the team is still brainstorming the best approach.
-
-#### [vitals.ts](file:///Users/vatsalpatel/Desktop/iris/web/src/vitals.ts)
-Hooks into the `web-vitals` library to emit `$web_vital` events for:
-- **LCP** (Largest Contentful Paint)
-- **INP** (Interaction to Next Paint)
-- **CLS** (Cumulative Layout Shift)
-
-Each `$web_vital` event stores: `$id`, `$name`, `$val`, `$rating`.
-
-#### [index.ts](file:///Users/vatsalpatel/Desktop/iris/web/src/index.ts)
-The **main `Iris` class** — the public API surface.
-
-| Method | What it does |
-|---|---|
-| `constructor(config)` | Merges defaults, creates `Transport` |
-| `start()` | Fires initial `$pageview`, patches `history.pushState` for SPA routing, enables autocapture & vitals |
-| `track(name, props?)` | Builds `EventPayload` from current `window` state and sends it |
-| `stop()` | Removes `popstate` listener (cleanup for Next.js HMR) |
-
-**SPA routing detection:** patches `history.pushState` to call `trackPageview()` and also listens to `popstate` (back/forward).
-
----
-
-## Layer 2: Backend Server (`cmd/` + `pkg/`)
-
-**Language:** Go 1.22  
-**Dependencies:** `go-sqlite3` (CGO), `google/uuid`  
-**Entry point:** `cmd/server/main.go`
-
-### Package Structure
-
-```
-pkg/
-├── core/       Domain types + repository interface (no deps)
-├── api/        HTTP handlers (depends on core)
-└── db/         SQLite implementation (depends on core)
-```
-
-This follows a clean **dependency inversion / ports-and-adapters** pattern. `core` defines the `EventRepository` interface; `db` implements it; `api` only talks to the interface — meaning the DB backend can be swapped without touching handlers.
-
-### Files
-
-#### [pkg/core/event.go](file:///Users/vatsalpatel/Desktop/iris/pkg/core/event.go)
-The pure domain layer — **no external imports** except `context` and `time`.
-
-**`Event` struct** — the canonical event record (JSON tags mirror the compact SDK payload keys):
-```
-id, event_name, url, domain, referrer, screen_width, site_id, session_id, visitor_id, properties (JSON), timestamp
-```
-
-**Result types:** `StatsResult`, `PageStat`, `ReferrerStat`, `VitalStat`, `DeviceStat`, `TimeSeriesBucket`
-
-**`EventRepository` interface** — the contract the db layer must satisfy:
-```go
-Insert, GetStats, GetTopPages, GetTopReferrers, GetVitals, GetDevices, GetPageviewsTimeSeries, Close
-```
-
-#### [pkg/db/sqlite.go](file:///Users/vatsalpatel/Desktop/iris/pkg/db/sqlite.go)
-Initialises SQLite and creates the schema on startup (idempotent `CREATE TABLE IF NOT EXISTS`).
-
-**Schema:**
-```sql
-events (
-  id TEXT PRIMARY KEY,
-  event_name TEXT,
-  url TEXT,
-  domain TEXT,
-  referrer TEXT,
-  screen_width INTEGER,
-  site_id TEXT,
-  session_id TEXT,
-  visitor_id TEXT,
-  properties TEXT,   -- JSON blob
-  timestamp DATETIME
-)
-```
-**Indexes:** `domain`, `site_id`, `timestamp` — the three most common filter axes.
-
-`properties` is stored as a serialised JSON string. SQLite's `json_extract()` is used at query time to pull values out (see vitals query).
-
-#### [pkg/db/query.go](file:///Users/vatsalpatel/Desktop/iris/pkg/db/query.go)
-All read queries. Each follows the same pattern:
-- Required filter: logical `site_id` (with legacy `domain` fallback for older callers)
-- Optional date range: `(? = '' OR timestamp >= ?)` — passing an empty string skips the filter
-
-| Method | SQL logic |
-|---|---|
-| `GetStats` | `COUNT(*)` pageviews + `COUNT(DISTINCT visitor_id/session_id)` — only `$pageview` events |
-| `GetTopPages` | Group by `url`, order by count DESC, limit 10 |
-| `GetTopReferrers` | Normalise referrer URLs to hostnames, then count distinct visitors per host |
-| `GetVitals` | Read raw vitals and compute P75 per metric (`LCP`, `INP`, `CLS`) |
-| `GetDevices` | CASE on `screen_width`, but only for `$pageview` events |
-| `GetPageviewsTimeSeries` | `strftime('%Y-%m-%d', timestamp)` group by day, order ASC |
-
-#### [pkg/api/handler.go](file:///Users/vatsalpatel/Desktop/iris/pkg/api/handler.go)
-HTTP layer wiring `net/http` to the repository.
-
-**CORS:** Ingest and dashboard APIs can each be locked down with env-based origin allowlists. If no allowlist is configured, browser access remains open for development.
-
-**String truncation:** `truncateStrings()` recursively walks the `Properties` map and truncates any string value > 200 chars to prevent abuse/bloat.
-
-**`POST /api/event` (TrackEvent):**
-1. Decode JSON body into `core.Event`
-2. Assign server-generated `ID` (UUID) and `Timestamp` (UTC)
-3. Truncate long property strings
-4. Call `repo.Insert()`
-
-**Read endpoints** (all `GET`, all require `?site_id=`; `?domain=` is still accepted for legacy callers):
-```
-/api/stats       → GetStats
-/api/pages       → GetTopPages
-/api/referrers   → GetTopReferrers
-/api/vitals      → GetVitals
-/api/devices     → GetDevices
-/api/timeseries  → GetPageviewsTimeSeries
-```
-
-#### [cmd/server/main.go](file:///Users/vatsalpatel/Desktop/iris/cmd/server/main.go)
-Bootstraps everything:
-1. Reads `PORT` (default `8080`) and `DB_PATH` (default `./data/iris.db`) from env
-2. Creates `data/` directory if missing
-3. Opens `SqliteRepository`
-4. Registers all HTTP routes
-5. Serves `dashboard/dist` as static files on `/` (catches all unmatched routes)
-6. Starts `http.ListenAndServe`
-
----
-
-## Layer 3: Dashboard UI (`dashboard/`)
-
-**Framework:** React 18 + Vite + TypeScript  
-**Key deps:** `recharts` (charts), `date-fns` (date math)
-
-### State management
-All state lives in a single `App.tsx` component — no global store. `useCallback` + `useEffect` trigger `fetchAll()` whenever the selected `site_id` or the date range changes. All 6 API calls are parallelised with `Promise.all`.
-
-### Files
-
-#### [dashboard/src/api.ts](file:///Users/vatsalpatel/Desktop/iris/dashboard/src/api.ts)
-Thin API client. `BASE = ""` means all requests go to the same host as the dashboard (the Go server serves both). `buildParams` constructs the `?site_id=&from=&to=` querystring.
-
-#### [dashboard/src/App.tsx](file:///Users/vatsalpatel/Desktop/iris/dashboard/src/App.tsx)
-The root component — handles all state. Contains:
-- **Sidebar** with tab navigation (Overview / Pages / Referrers / Web Vitals / Devices)
-- **Topbar** with `site_id` selection and date preset buttons (7d / 30d / 90d)
-- **Content area** — switches between tab views, always shows `StatsCards` at top
-
-#### Components
-
-| File | What it renders |
-|---|---|
-| [StatsCards.tsx](file:///Users/vatsalpatel/Desktop/iris/dashboard/src/components/StatsCards.tsx) | 3 top-level KPI cards: Pageviews, Unique Visitors, Sessions |
-| [PageviewsChart.tsx](file:///Users/vatsalpatel/Desktop/iris/dashboard/src/components/PageviewsChart.tsx) | Recharts `LineChart` with zero-filled date buckets for the full window |
-| [TopPages.tsx](file:///Users/vatsalpatel/Desktop/iris/dashboard/src/components/TopPages.tsx) | Table with relative URL paths + proportional bar chart per row |
-| [TopReferrers.tsx](file:///Users/vatsalpatel/Desktop/iris/dashboard/src/components/TopReferrers.tsx) | Same style table, `cleanReferrer()` strips `https://www.` prefix |
-| [WebVitals.tsx](file:///Users/vatsalpatel/Desktop/iris/dashboard/src/components/WebVitals.tsx) | LCP / INP / CLS cards with colour-coded ratings (thresholds from web.dev/vitals) |
-| [DeviceBreakdown.tsx](file:///Users/vatsalpatel/Desktop/iris/dashboard/src/components/DeviceBreakdown.tsx) | Mobile / Tablet / Desktop with percentage bars |
-
----
-
-## Infrastructure
-
-### Docker (multi-stage build)
-```
-Stage 1 (node:20-alpine):  pnpm build → dashboard/dist/
-Stage 2 (golang:1.24-alpine): CGO_ENABLED=1, gcc → iris-server binary
-Stage 3 (alpine:latest):   copies binary + dashboard/dist, VOLUME /app/data
-```
-SQLite db is persisted via a Docker volume at `/app/data/iris.db`.
-
-### docker-compose.yml
-Runs on `host:8081 → container:8080`. Mounts `./data:/app/data` for SQLite persistence.
-
-### pnpm workspaces
-`pnpm-workspace.yaml` ties together `web/` and `dashboard/` packages in a monorepo. `Taskfile.yml` provides dev shortcuts (likely `task dev`, `task build`, etc.).
-
----
-
-## Event Taxonomy
-
-| Event name | Fired by | When |
-|---|---|---|
-| `$pageview` | `Iris.start()`, `history.pushState`, `popstate` | Every page navigation |
-| `$click` | `autocapture.ts` | Click on buttons/links (when autocapture enabled) |
-| `$web_vital` | `vitals.ts` via `web-vitals` lib | CLS / INP / LCP reported by browser |
-| Custom events | `iris.track("my_event", props)` | Manually called by developer |
-
----
-
-## Key Design Decisions & Known Limitations
-
-> [!NOTE]
-> These are important to understand before making changes.
-
-1. **No authentication on the API** — anyone who knows your server URL can query analytics for any domain. The API is designed for trusted internal/selfhosted use.
-
-2. **`site_id` is the primary tenancy axis** — reads aggregate by logical `site_id`, so one site can span multiple domains or subdomains. Legacy `domain` query params are still accepted for older clients.
-
-3. **`history.pushState` patch is not cleaned up** — `stop()` only removes the `popstate` listener. The `pushState` monkey-patch persists after `stop()` (intentional — noted in comment, due to other libraries also patching it).
-
-4. **Autocapture is WIP** — the `autocapture.ts` comment explicitly flags this as "work in progress, still brainstorming".
-
-5. **Event batching is opt-in** — by default every event fires immediately. Pass `batching: { maxSize, flushInterval, flushOnLeave }` in the config to queue events and flush them as a single `POST /api/events` request.
-
-6. **SQLite + CGO** — requires `gcc` at build time and is single-file, single-process. Not horizontally scalable, but appropriate for self-hosted / personal use.
-
-7. **Device detection via pageview screen width** — not User-Agent parsing. Breakpoints: `<768px` = Mobile, `<1024px` = Tablet, `≥1024px` = Desktop.
-
-8. **Properties are stored as a flat JSON string** — queried via SQLite's `json_extract()`. Works for simple cases (vitals), but complex property querying is limited.
-
-9. **No pagination** on `/api/pages` and `/api/referrers` — hard-coded `limit 10`.
-
----
-
-## Extension Points
-
-| What you want to add | Where to touch |
-|---|---|
-| New event type / property | `web/src/` (emit), `pkg/core/event.go` (type), `pkg/db/query.go` (query), `pkg/api/handler.go` (endpoint), `dashboard/src/` (visualise) |
-| New analytics query | Add method to `EventRepository` interface in `core/event.go`, implement in `db/query.go`, add handler in `api/handler.go`, add fetch in `dashboard/src/api.ts` |
-| Swap SQLite for another DB | Write a new struct implementing `core.EventRepository` — handlers don't need changes |
-| Auth / API key protection | Add middleware in `cmd/server/main.go` before registering routes |
-| Batching / queue | Already implemented — configure `batching` in the SDK config. To customise flush behaviour, edit `web/src/transport.ts` |
+## Browser identity and delivery
+
+- Visitor IDs live in per-site `localStorage` keys and rotate at midnight in the configured site timezone.
+- Session IDs also live in `localStorage`, are shared by same-origin tabs, and
+  roll after 30 minutes without tracked activity.
+- Storage failures fall back to memory for the page lifecycle.
+- Every event gets a client-generated idempotency ID, occurrence timestamp,
+  wire version, and SDK version.
+- Delivery is Beacon-first with fetch fallback and optional in-memory batching.
+  The queue is not durable and does not retry rejected delivery.
+- Autocapture is opt-in and can cover pageviews, clicks, and Web Vitals.
+
+## Ingestion contract
+
+Before tracking, register the site and its allowed hostnames through
+`POST /api/sites`. This mutation requires
+`Authorization: Bearer <IRIS_ADMIN_TOKEN>` and is disabled when the environment
+variable is unset. Site listing, analytics reads, and event ingestion remain
+unauthenticated.
+
+For each event the server:
+
+1. validates required IDs, name, width, timestamp skew, wire version, site, and
+   allowed hostname;
+2. accepts only absolute HTTP(S) tracked/referrer URLs without user information;
+3. removes query strings and fragments and extracts typed path/referrer fields;
+4. records client occurrence time and server receive time separately;
+5. inserts by unique client ID, making replay idempotent;
+6. returns `202 Accepted` only after the raw transaction commits.
+
+## SQLite architecture
+
+Connections use foreign keys, WAL, a five-second busy timeout, and `NORMAL`
+synchronous mode. One connection serializes ingestion, site changes,
+projections, and retention. A separate pool permits up to four read connections.
+
+Versioned embedded SQL migrations are recorded in `schema_migrations`. The first
+v2 migration upgrades a legacy events-only database transactionally.
+
+Tables are grouped by responsibility:
+
+- control plane: `sites`, `site_domains`, and reserved `ingest_keys`;
+- source of truth: append-only-within-retention `events`, ordered by `seq`;
+- rebuildable state: `sessions`, `daily_site_metrics`, `daily_page_metrics`, and
+  exact daily referrer/visitor/session sets;
+- operational state: `schema_migrations` and `projection_checkpoints`.
+
+Compound event indexes start with site and occurrence time, with event-name,
+session, and visitor variants. Common URL dimensions are typed columns;
+arbitrary event properties remain validated JSON text.
+
+## Projection and retention lifecycle
+
+The in-process maintenance loop drains up to 1,000 events per projection batch
+at startup and polls every 250 ms. Derived writes and checkpoint movement commit
+together. A version mismatch fails closed. `iris-server rebuild-projections`
+clears only derived state and deterministically replays the raw log.
+
+Retention runs at startup and every 24 hours using each site's `retention_days`.
+`iris-server apply-retention` also runs it explicitly. Expired raw facts,
+sessions, and daily rows are removed in one serialized transaction.
+
+`GET /api/status` and `/healthz` report database health and projection progress.
+Backups, WAL/file-size maintenance, and external observability remain operator
+responsibilities.
+
+## Scaling boundary
+
+SQLite is intentional for a single-node, self-hosted deployment. Consider
+PostgreSQL for a multi-user control plane and ClickHouse for analytical facts
+only after measurements show sustained writer saturation, multi-replica ingest,
+unbounded projection lag, or unacceptable ad-hoc/raw-query latency at very large
+event volumes. The raw-fact and rebuildable-projection boundary keeps that future
+move independent of the browser contract.

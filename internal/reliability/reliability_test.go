@@ -15,6 +15,7 @@ import (
 
 	"github.com/VatsalP117/iris/internal/reliability"
 	"github.com/VatsalP117/iris/pkg/api"
+	"github.com/VatsalP117/iris/pkg/core"
 	"github.com/VatsalP117/iris/pkg/db"
 )
 
@@ -66,6 +67,7 @@ func TestRunReconcilesSingleAndBatchIngestion(t *testing.T) {
 				t.Fatalf("NewSqliteDB returned error: %v", err)
 			}
 			t.Cleanup(func() { _ = repo.Close() })
+			registerLabSite(t, repo, "integration-site-"+strconv.Itoa(batchSize))
 
 			handler := api.NewHandler(repo)
 			mux := http.NewServeMux()
@@ -144,6 +146,7 @@ func TestRunMeasuresConcurrentAnalyticsReads(t *testing.T) {
 		t.Fatalf("NewSqliteDB returned error: %v", err)
 	}
 	t.Cleanup(func() { _ = repo.Close() })
+	registerLabSite(t, repo, "mixed-read-write")
 
 	handler := api.NewHandler(repo)
 	mux := http.NewServeMux()
@@ -199,6 +202,7 @@ func TestRunSupportsDeterministicRateStages(t *testing.T) {
 		t.Fatalf("NewSqliteDB returned error: %v", err)
 	}
 	t.Cleanup(func() { _ = repo.Close() })
+	registerLabSite(t, repo, "staged-load")
 
 	handler := api.NewHandler(repo)
 	mux := http.NewServeMux()
@@ -252,6 +256,20 @@ func TestRunSupportsDeterministicRateStages(t *testing.T) {
 		report.Load.Stages[1].AcceptedEvents != 100 {
 		t.Fatalf("unexpected stage summaries: %+v", report.Load.Stages)
 	}
+}
+
+func registerLabSite(t *testing.T, repo *db.SqliteRepository, siteID string) {
+	t.Helper()
+	if err := repo.CreateSite(context.Background(), &core.Site{
+		ID: siteID, Name: siteID, Domains: []string{domainForSiteForTest(siteID)},
+	}); err != nil {
+		t.Fatalf("CreateSite returned error: %v", err)
+	}
+}
+
+func domainForSiteForTest(siteID string) string {
+	manifest := reliability.BuildManifest("domain-fixture", siteID, 1)
+	return manifest[0].Event.Domain
 }
 
 func TestCompareReportsDetectsRegressionsAndConfigMismatch(t *testing.T) {

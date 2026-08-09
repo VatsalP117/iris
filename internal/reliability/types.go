@@ -1,6 +1,7 @@
 package reliability
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"time"
 
@@ -8,9 +9,14 @@ import (
 )
 
 const (
-	defaultDomain       = "lab.example"
+	defaultAdminToken   = "iris-local-reliability-lab"
 	maxDiagnosticSample = 50
 )
+
+func domainForSite(siteID string) string {
+	digest := sha256.Sum256([]byte(siteID))
+	return fmt.Sprintf("site-%x.lab.example", digest[:8])
+}
 
 type Config struct {
 	TargetURL      string

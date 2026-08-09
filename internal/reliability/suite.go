@@ -59,12 +59,13 @@ type SuiteReport struct {
 }
 
 type LabServer struct {
-	Binary  string
-	WorkDir string
-	DBPath  string
-	LogPath string
-	Port    int
-	Env     []string
+	Binary     string
+	WorkDir    string
+	DBPath     string
+	LogPath    string
+	Port       int
+	Env        []string
+	AdminToken string
 
 	mu      sync.Mutex
 	command *exec.Cmd
@@ -247,6 +248,12 @@ func runSuiteProfile(
 		RequestTimeout: 10 * time.Second,
 		Stages:         profile.Stages,
 	}
+	if err := server.RegisterSite(ctx, config.SiteID); err != nil {
+		return SuiteProfileResult{
+			Name:  profile.Name,
+			Error: "register isolated site: " + err.Error(),
+		}
+	}
 
 	sampler := StartResourceSampler(
 		server.PID(),
@@ -329,16 +336,21 @@ func (s *LabServer) Start(ctx context.Context) error {
 		s.logFile = logFile
 	}
 
+	adminToken := s.AdminToken
+	if adminToken == "" {
+		adminToken = defaultAdminToken
+	}
 	command := exec.Command(s.Binary)
 	command.Dir = s.WorkDir
+	command.Env = append(os.Environ(), s.Env...)
 	command.Env = append(
-		os.Environ(),
+		command.Env,
 		"PORT="+strconv.Itoa(s.Port),
 		"DB_PATH="+s.DBPath,
 		"DASHBOARD_DIR="+filepath.Join(s.WorkDir, "dashboard"),
 		"IRIS_LAB_PPROF=1",
+		"IRIS_ADMIN_TOKEN="+adminToken,
 	)
-	command.Env = append(command.Env, s.Env...)
 	command.Stdout = s.logFile
 	command.Stderr = s.logFile
 	if err := command.Start(); err != nil {
@@ -356,6 +368,47 @@ func (s *LabServer) Start(ctx context.Context) error {
 		_ = command.Process.Kill()
 		s.command = nil
 		return err
+	}
+	return nil
+}
+
+func (s *LabServer) RegisterSite(ctx context.Context, siteID string) error {
+	adminToken := s.AdminToken
+	if adminToken == "" {
+		adminToken = defaultAdminToken
+	}
+	payload, err := json.Marshal(struct {
+		SiteID        string   `json:"site_id"`
+		Name          string   `json:"name"`
+		Timezone      string   `json:"timezone"`
+		RetentionDays int      `json:"retention_days"`
+		Domains       []string `json:"domains"`
+	}{
+		SiteID: siteID, Name: siteID, Timezone: "UTC", RetentionDays: 365,
+		Domains: []string{domainForSite(siteID)},
+	})
+	if err != nil {
+		return fmt.Errorf("encode site configuration: %w", err)
+	}
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		s.URL()+"/api/sites",
+		strings.NewReader(string(payload)),
+	)
+	if err != nil {
+		return fmt.Errorf("create site request: %w", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+adminToken)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := (&http.Client{Timeout: 5 * time.Second}).Do(request)
+	if err != nil {
+		return fmt.Errorf("register site: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		return fmt.Errorf("register site returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
 	}
 	return nil
 }

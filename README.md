@@ -8,11 +8,18 @@ For the evidence-based architecture, API, data, security, operations, ADR, testi
 
 For npm versioning and publishing, see [`docs/RELEASING.md`](docs/RELEASING.md).
 
+For the current database model and scaling path, see
+[`docs/09_V2_DATA_ARCHITECTURE.md`](docs/09_V2_DATA_ARCHITECTURE.md).
+
 ## Architecture
 
 * **Frontend Dashboard:** React 18 + Vite (Tailwind/Plain CSS)
-* **Backend API:** Go (`net/http`) + SQLite
+* **Backend API:** Go (`net/http`) + SQLite in WAL mode
 * **Client SDK:** Typescript (`iris-analytics`)
+
+SQLite uses a serialized writer and a separate read pool. Versioned migrations
+run when the database opens. The append-only `events` table is the durable source
+of truth; sessions and daily metrics are rebuildable projections.
 
 ---
 
@@ -24,15 +31,35 @@ The easiest way to run the Iris backend and dashboard is to use Docker.
 2. Run Docker Compose:
 
 ```bash
-docker compose up -d
+IRIS_ADMIN_TOKEN='replace-with-a-long-random-token' docker compose up -d
 ```
 
 The server will automatically:
 1. Spin up the backend API on `http://localhost:8081`.
 2. Serve the built React Dashboard on the root URL `/`.
-3. Create a SQLite database in `./data/iris.db` (persistent).
+3. Create or migrate a persistent SQLite database in `./data/iris.db`.
 
 **View Dashboard:** Open `http://localhost:8081/`
+
+Before a browser can submit events, register its site ID and allowed hostname:
+
+```bash
+curl -X POST http://localhost:8081/api/sites \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer replace-with-a-long-random-token' \
+  -d '{
+    "site_id": "my-awesome-site",
+    "name": "My Awesome Site",
+    "timezone": "UTC",
+    "retention_days": 365,
+    "domains": ["www.example.com", "example.com"]
+  }'
+```
+
+Use the same `site_id` when configuring the SDK. Event ingestion returns `404`
+for an unknown site and `403` when an event URL's hostname is not registered for
+that site. For local development, include the exact local hostname (usually
+`localhost`) in `domains`; hostnames do not include a scheme or port.
 
 ### Dokploy Monorepo Split (Recommended)
 
@@ -83,7 +110,9 @@ const analytics = new Iris({
   host: "https://analytics.yourdomain.com", 
   
   // The unique identifier for this specific website/project
-  siteId: "my-awesome-site" 
+  siteId: "my-awesome-site",
+  // Must match the timezone used when registering the site
+  timezone: "UTC"
 });
 
 // Starts listening to route changes and automatically sends pageviews
@@ -151,6 +180,19 @@ When running the Go backend, you can configure it using the following environmen
 | `PORT` | `8080` | The port the HTTP server binds to. |
 | `DB_PATH` | `./data/iris.db` | The path to the SQLite database file. |
 | `DASHBOARD_DIR` | `./dashboard/dist` | Path to the directory containing the built frontend. |
+| `IRIS_ADMIN_TOKEN` | unset | Bearer token required by `POST /api/sites`. Site mutation returns `503` while unset. |
+
+`IRIS_LAB_PPROF` and `IRIS_LAB_DB_EXTRA_PAGES` are reliability-lab controls,
+not production configuration. Site timezone and retention are configured through
+`POST /api/sites`. The maintenance loop projects new events every 250 ms and
+applies each site's retention policy at startup and every 24 hours.
+
+Operational commands use the same `DB_PATH` configuration:
+
+```bash
+iris-server rebuild-projections
+iris-server apply-retention
+```
 
 ## 5. Dashboard Analytics APIs
 
@@ -164,6 +206,7 @@ Dashboard reporting uses `site_id`, `from`, and `to` query parameters:
 | `/api/vitals/distribution` | Good, needs-improvement, and poor sample counts for LCP, INP, and CLS |
 | `/api/vitals/pages` | Per-page P75 LCP, INP, CLS, and pageview traffic |
 | `/api/vitals/score` | Overall 0–100 performance score and per-metric scores |
+| `/api/status` | Database health, raw-event sequence, projection checkpoint, and projection lag |
 
 The custom-event conversion rate is the percentage of pageview sessions that
 recorded at least one custom event in the selected period. The performance score
@@ -174,5 +217,7 @@ LCP, INP, and CLS scores.
 
 ## 6. Security & Privacy
 
-* **No Cookies:** User identity is tracked anonymously using standard `localStorage` (Visitor ID, rotated daily in UTC) and `sessionStorage` (Session ID). No third-party cookies are used.
-* **CORS:** The backend allows cross-origin browser requests by default so the SDK and hosted dashboard can talk to the API without additional setup.
+* **No Cookies:** Anonymous visitor IDs rotate at midnight in the configured site timezone. Session IDs use `localStorage`, are isolated per site, shared across same-origin tabs, and roll after 30 minutes of inactivity. No third-party cookies are used.
+* **URL minimization:** The backend accepts only absolute HTTP(S) URLs, strips query strings and fragments before storage, and verifies the resulting hostname against the site's domain allowlist.
+* **Site administration:** `POST /api/sites` requires `Authorization: Bearer <IRIS_ADMIN_TOKEN>`. Use a long random value and keep it server-side. Analytics reads, site listing, and browser ingestion are currently unauthenticated.
+* **CORS:** The backend allows cross-origin browser requests by default so the SDK and hosted dashboard can talk to the API without additional setup. The domain allowlist is an ingestion-integrity check, not authentication.

@@ -4,6 +4,8 @@ import { initAutoCapture } from "./autocapture";
 import { initVitals } from "./vitals";
 import { generateId, getVisitorIdentity, getSessionId } from "./storage";
 
+const SDK_VERSION = "1.0.0";
+
 // Module-level state prevents multiple Iris instances from duplicating pageviews.
 let pushStatePatched = false;
 const pageviewInstances = new Set<Iris>();
@@ -16,13 +18,16 @@ export class Iris {
   private originalPushState: typeof history.pushState | null = null;
   private originalReplaceState: typeof history.replaceState | null = null;
   private autocaptureCleanup: (() => void) | null = null;
-  private visitorIdentity = getVisitorIdentity();
-  private pendingVisitorEvents = new Set<Omit<EventPayload, "vid">>();
+  private pendingVisitorEvents = new Map<
+    Omit<EventPayload, "vid">,
+    ReturnType<typeof getVisitorIdentity>
+  >();
 
   constructor(config: IrisConfig) {
     this.config = {
       autocapture: false,
       debug: false,
+      timezone: "UTC",
       ...config,
     };
     this.transport = new Transport(this.config);
@@ -59,6 +64,7 @@ export class Iris {
   }
 
   public track(name: string, props?: object) {
+    const visitorIdentity = getVisitorIdentity(this.config.siteId, this.config.timezone!);
     const payload: Omit<EventPayload, "vid"> = {
       id: generateId(),
       n: name,
@@ -67,12 +73,15 @@ export class Iris {
       r: document.referrer || null,
       w: window.innerWidth,
       s: this.config.siteId,
-      sid: getSessionId(),
+      sid: getSessionId(this.config.siteId),
       p: props as Record<string, any> | undefined,
+      ts: new Date().toISOString(),
+      v: 1,
+      sv: SDK_VERSION,
     };
-    this.pendingVisitorEvents.add(payload);
+    this.pendingVisitorEvents.set(payload, visitorIdentity);
     this.attachIdentityLifecycleListeners();
-    void this.visitorIdentity.ready
+    void visitorIdentity.ready
       .then((vid) => {
         if (this.pendingVisitorEvents.delete(payload)) {
           this.transport.send({ ...payload, vid });
@@ -120,8 +129,8 @@ export class Iris {
   }
 
   private flushPendingVisitorEvents = () => {
-    for (const payload of this.pendingVisitorEvents) {
-      this.transport.send({ ...payload, vid: this.visitorIdentity.current });
+    for (const [payload, identity] of this.pendingVisitorEvents) {
+      this.transport.send({ ...payload, vid: identity.current });
     }
     this.pendingVisitorEvents.clear();
     this.removeIdentityLifecycleListeners();
