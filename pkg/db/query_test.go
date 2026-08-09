@@ -3,8 +3,10 @@ package db
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -297,7 +299,7 @@ func TestCustomEventsAndPerformanceAnalytics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPagePerformance returned error: %v", err)
 	}
-	if len(pages) != 2 || pages[0].URL != "https://example.com/checkout" {
+	if len(pages) != 2 || pages[0].URL != "/checkout" {
 		t.Fatalf("unexpected page performance order: %+v", pages)
 	}
 	if pages[0].LCP == nil || *pages[0].LCP != 4500 || pages[0].Traffic != 2 {
@@ -368,6 +370,55 @@ func TestGetStatsSupportsDateTimeAndDateWindows(t *testing.T) {
 	}
 }
 
+func TestGetStatsUsesSiteTimezoneForDateOnlyWindow(t *testing.T) {
+	repo := newTestRepo(t)
+	if err := repo.CreateSite(context.Background(), &core.Site{
+		ID:       "site-a",
+		Name:     "Site A",
+		Timezone: "Asia/Kolkata",
+		Domains:  []string{"example.com", "www.example.com"},
+	}); err != nil {
+		t.Fatalf("CreateSite returned error: %v", err)
+	}
+
+	for index, timestamp := range []time.Time{
+		time.Date(2026, 3, 23, 18, 29, 59, 999999000, time.UTC),
+		time.Date(2026, 3, 23, 18, 30, 0, 0, time.UTC),
+		time.Date(2026, 3, 24, 18, 29, 59, 999999000, time.UTC),
+		time.Date(2026, 3, 24, 18, 30, 0, 0, time.UTC),
+	} {
+		insertEvent(t, repo, core.Event{
+			EventName: "$pageview",
+			Domain:    "example.com",
+			SiteID:    "site-a",
+			SessionID: fmt.Sprintf("s-%d", index),
+			VisitorID: fmt.Sprintf("v-%d", index),
+			Timestamp: timestamp,
+		})
+	}
+
+	stats, err := repo.GetStats(context.Background(), "site-a", "2026-03-24", "2026-03-24")
+	if err != nil {
+		t.Fatalf("GetStats returned error: %v", err)
+	}
+	if stats.Pageviews != 2 {
+		t.Fatalf("expected 2 pageviews in Asia/Kolkata calendar day, got %+v", stats)
+	}
+
+	absoluteStats, err := repo.GetStats(
+		context.Background(),
+		"site-a",
+		"2026-03-24T18:29:59Z",
+		"2026-03-24T18:30:00Z",
+	)
+	if err != nil {
+		t.Fatalf("GetStats with RFC3339 window returned error: %v", err)
+	}
+	if absoluteStats.Pageviews != 2 {
+		t.Fatalf("expected RFC3339 boundaries to remain absolute, got %+v", absoluteStats)
+	}
+}
+
 func newTestRepo(t *testing.T) *SqliteRepository {
 	t.Helper()
 
@@ -397,6 +448,23 @@ func insertEvent(t *testing.T, repo *SqliteRepository, event core.Event) {
 	event.ID = fmt.Sprintf("event-%d", seq)
 	if event.URL == "" {
 		event.URL = "https://example.com/"
+	}
+	if event.Pathname == "" {
+		parsed, err := url.Parse(event.URL)
+		if err != nil {
+			t.Fatalf("parse event URL: %v", err)
+		}
+		event.Pathname = parsed.EscapedPath()
+		if event.Pathname == "" {
+			event.Pathname = "/"
+		}
+	}
+	if event.ReferrerHost == "" && event.Referrer != "" {
+		parsed, err := url.Parse(event.Referrer)
+		if err != nil {
+			t.Fatalf("parse event referrer: %v", err)
+		}
+		event.ReferrerHost = strings.TrimPrefix(strings.ToLower(parsed.Hostname()), "www.")
 	}
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Unix(seq, 0).UTC()

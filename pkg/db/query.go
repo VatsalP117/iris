@@ -3,25 +3,112 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"math"
-	"net/url"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/VatsalP117/iris/pkg/core"
 )
 
-//
-// Helper to build WHERE clauses consistently.
-// All query methods accept a site key plus from/to strings (date or datetime, or empty).
-// The site key can be the logical site_id or a legacy domain value.
-//
+func (r *SqliteRepository) analyticsWindow(
+	ctx context.Context,
+	siteID, from, to string,
+) (string, []any, error) {
+	location := time.UTC
+	if isDateOnly(from) || isDateOnly(to) {
+		var timezone string
+		if err := r.db.QueryRowContext(ctx, `
+			SELECT COALESCE((SELECT NULLIF(timezone, '') FROM sites WHERE id = ?), 'UTC')
+		`, siteID).Scan(&timezone); err != nil {
+			return "", nil, fmt.Errorf("get site timezone: %w", err)
+		}
+		var err error
+		location, err = time.LoadLocation(timezone)
+		if err != nil {
+			return "", nil, fmt.Errorf("load site timezone %q: %w", timezone, err)
+		}
+	}
 
-const siteMatchClause = "(COALESCE(NULLIF(site_id, ''), domain) = ? OR domain = ?)"
-const fromTimeClause = "(? = '' OR datetime(timestamp) >= datetime(?))"
-const toTimeClause = "(? = '' OR datetime(timestamp) <= datetime(CASE WHEN length(trim(?)) = 10 THEN ? || ' 23:59:59' ELSE ? END))"
+	clause := ""
+	args := []any{}
+	if from != "" {
+		value, err := parseAnalyticsTime(from, false, location)
+		if err != nil {
+			return "", nil, fmt.Errorf("parse from time: %w", err)
+		}
+		clause += "\n\t  AND occurred_at_us >= ?"
+		args = append(args, value.UnixMicro())
+	}
+	if to != "" {
+		value, err := parseAnalyticsTime(to, true, location)
+		if err != nil {
+			return "", nil, fmt.Errorf("parse to time: %w", err)
+		}
+		clause += "\n\t  AND occurred_at_us <= ?"
+		args = append(args, value.UnixMicro())
+	}
+	return clause, args, nil
+}
+
+func isDateOnly(value string) bool {
+	return len(value) == len("2006-01-02")
+}
+
+func parseAnalyticsTime(value string, endOfDay bool, location *time.Location) (time.Time, error) {
+	if isDateOnly(value) {
+		parsed, err := time.ParseInLocation("2006-01-02", value, location)
+		if err != nil {
+			return time.Time{}, err
+		}
+		if endOfDay {
+			return parsed.AddDate(0, 0, 1).Add(-time.Microsecond), nil
+		}
+		return parsed, nil
+	}
+
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02 15:04:05"} {
+		parsed, err := time.ParseInLocation(layout, value, time.UTC)
+		if err == nil {
+			return parsed.UTC(), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unsupported time %q", value)
+}
+
+func (r *SqliteRepository) projectionDayWindow(
+	ctx context.Context,
+	from, to string,
+) (string, []any, bool, error) {
+	if (from != "" && !isDateOnly(from)) || (to != "" && !isDateOnly(to)) {
+		return "", nil, false, nil
+	}
+	status, err := r.GetSystemStatus(ctx)
+	if err != nil {
+		return "", nil, false, err
+	}
+	if status.EventLastSeq == 0 || status.ProjectionLag != 0 {
+		return "", nil, false, nil
+	}
+	clause := ""
+	args := []any{}
+	if from != "" {
+		clause += " AND day >= ?"
+		args = append(args, from)
+	}
+	if to != "" {
+		clause += " AND day <= ?"
+		args = append(args, to)
+	}
+	return clause, args, true, nil
+}
 
 func (r *SqliteRepository) GetStats(ctx context.Context, siteKey, from, to string) (*core.StatsResult, error) {
+	timeClause, timeArgs, err := r.analyticsWindow(ctx, siteKey, from, to)
+	if err != nil {
+		return nil, err
+	}
 	query := `
 	SELECT
 		COUNT(*)                                          AS pageviews,
@@ -29,11 +116,10 @@ func (r *SqliteRepository) GetStats(ctx context.Context, siteKey, from, to strin
 		COUNT(DISTINCT session_id)                        AS sessions
 	FROM events
 	WHERE event_name = '$pageview'
-	  AND ` + siteMatchClause + `
-	  AND ` + fromTimeClause + `
-	  AND ` + toTimeClause + `
+	  AND site_id = ?` + timeClause + `
 	`
-	row := r.db.QueryRowContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to)
+	args := append([]any{siteKey}, timeArgs...)
+	row := r.db.QueryRowContext(ctx, query, args...)
 
 	var res core.StatsResult
 	if err := row.Scan(&res.Pageviews, &res.UniqueVisitors, &res.Sessions); err != nil {
@@ -43,18 +129,50 @@ func (r *SqliteRepository) GetStats(ctx context.Context, siteKey, from, to strin
 }
 
 func (r *SqliteRepository) GetTopPages(ctx context.Context, siteKey, from, to string, limit int) ([]core.PageStat, error) {
+	if dayClause, dayArgs, ok, err := r.projectionDayWindow(ctx, from, to); err != nil {
+		return nil, err
+	} else if ok {
+		query := `
+			SELECT pathname, SUM(pageviews)
+			FROM daily_page_metrics
+			WHERE site_id = ?` + dayClause + `
+			GROUP BY pathname
+			ORDER BY SUM(pageviews) DESC, pathname ASC
+			LIMIT ?
+		`
+		args := append([]any{siteKey}, dayArgs...)
+		args = append(args, limit)
+		rows, queryErr := r.db.QueryContext(ctx, query, args...)
+		if queryErr != nil {
+			return nil, queryErr
+		}
+		defer rows.Close()
+		var results []core.PageStat
+		for rows.Next() {
+			var result core.PageStat
+			if err := rows.Scan(&result.URL, &result.Pageviews); err != nil {
+				return nil, err
+			}
+			results = append(results, result)
+		}
+		return results, rows.Err()
+	}
+	timeClause, timeArgs, err := r.analyticsWindow(ctx, siteKey, from, to)
+	if err != nil {
+		return nil, err
+	}
 	query := `
-	SELECT url, COUNT(*) AS pageviews
+	SELECT pathname, COUNT(*) AS pageviews
 	FROM events
 	WHERE event_name = '$pageview'
-	  AND ` + siteMatchClause + `
-	  AND ` + fromTimeClause + `
-	  AND ` + toTimeClause + `
-	GROUP BY url
+	  AND site_id = ?` + timeClause + `
+	GROUP BY pathname
 	ORDER BY pageviews DESC
 	LIMIT ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to, limit)
+	args := append([]any{siteKey}, timeArgs...)
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -72,76 +190,60 @@ func (r *SqliteRepository) GetTopPages(ctx context.Context, siteKey, from, to st
 }
 
 func (r *SqliteRepository) GetTopReferrers(ctx context.Context, siteKey, from, to string, limit int) ([]core.ReferrerStat, error) {
+	timeClause, timeArgs, err := r.analyticsWindow(ctx, siteKey, from, to)
+	if err != nil {
+		return nil, err
+	}
+	if limit <= 0 {
+		limit = -1
+	}
 	query := `
-	SELECT referrer, visitor_id
+	SELECT referrer_host, COUNT(DISTINCT NULLIF(visitor_id, '')) AS visitors
 	FROM events
 	WHERE event_name = '$pageview'
-	  AND ` + siteMatchClause + `
-	  AND referrer != ''
-	  AND ` + fromTimeClause + `
-	  AND ` + toTimeClause + `
+	  AND site_id = ?
+	  AND referrer_host != ''` + timeClause + `
+	GROUP BY referrer_host
+	ORDER BY visitors DESC, referrer_host ASC
+	LIMIT ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to)
+	args := append([]any{siteKey}, timeArgs...)
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	visitorsByHost := map[string]map[string]struct{}{}
+	results := []core.ReferrerStat{}
 	for rows.Next() {
-		var referrer string
-		var visitorID string
-		if err := rows.Scan(&referrer, &visitorID); err != nil {
+		var result core.ReferrerStat
+		if err := rows.Scan(&result.Referrer, &result.Visitors); err != nil {
 			return nil, err
 		}
-
-		host := normalizeReferrer(referrer)
-		if host == "" {
-			continue
-		}
-		if visitorsByHost[host] == nil {
-			visitorsByHost[host] = map[string]struct{}{}
-		}
-		visitorsByHost[host][visitorID] = struct{}{}
+		results = append(results, result)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-
-	results := make([]core.ReferrerStat, 0, len(visitorsByHost))
-	for host, visitors := range visitorsByHost {
-		results = append(results, core.ReferrerStat{
-			Referrer: host,
-			Visitors: len(visitors),
-		})
-	}
-
-	sort.Slice(results, func(i, j int) bool {
-		if results[i].Visitors == results[j].Visitors {
-			return results[i].Referrer < results[j].Referrer
-		}
-		return results[i].Visitors > results[j].Visitors
-	})
-
-	if limit > 0 && len(results) > limit {
-		results = results[:limit]
-	}
-
 	return results, nil
 }
 
 func (r *SqliteRepository) GetVitals(ctx context.Context, siteKey, from, to string) ([]core.VitalStat, error) {
+	timeClause, timeArgs, err := r.analyticsWindow(ctx, siteKey, from, to)
+	if err != nil {
+		return nil, err
+	}
 	query := `
 	SELECT
 		json_extract(properties, '$.$name') AS name,
 		CAST(json_extract(properties, '$.$val') AS REAL) AS value
 	FROM events
 	WHERE event_name = '$web_vital'
-	  AND ` + siteMatchClause + `
-	  AND ` + fromTimeClause + `
-	  AND ` + toTimeClause + `
+	  AND site_id = ?` + timeClause + `
 	`
-	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to)
+	args := append([]any{siteKey}, timeArgs...)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -183,17 +285,20 @@ func (r *SqliteRepository) GetVitals(ctx context.Context, siteKey, from, to stri
 }
 
 func (r *SqliteRepository) GetVitalDistributions(ctx context.Context, siteKey, from, to string) ([]core.VitalDistribution, error) {
+	timeClause, timeArgs, err := r.analyticsWindow(ctx, siteKey, from, to)
+	if err != nil {
+		return nil, err
+	}
 	query := `
 	SELECT
 		json_extract(properties, '$.$name') AS name,
 		CAST(json_extract(properties, '$.$val') AS REAL) AS value
 	FROM events
 	WHERE event_name = '$web_vital'
-	  AND ` + siteMatchClause + `
-	  AND ` + fromTimeClause + `
-	  AND ` + toTimeClause + `
+	  AND site_id = ?` + timeClause + `
 	`
-	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to)
+	args := append([]any{siteKey}, timeArgs...)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -239,19 +344,22 @@ func (r *SqliteRepository) GetVitalDistributions(ctx context.Context, siteKey, f
 }
 
 func (r *SqliteRepository) GetPagePerformance(ctx context.Context, siteKey, from, to string, limit int) ([]core.PagePerformanceStat, error) {
+	timeClause, timeArgs, err := r.analyticsWindow(ctx, siteKey, from, to)
+	if err != nil {
+		return nil, err
+	}
 	vitalsQuery := `
 	SELECT
-		url,
+		pathname,
 		json_extract(properties, '$.$name') AS name,
 		CAST(json_extract(properties, '$.$val') AS REAL) AS value
 	FROM events
 	WHERE event_name = '$web_vital'
-	  AND url != ''
-	  AND ` + siteMatchClause + `
-	  AND ` + fromTimeClause + `
-	  AND ` + toTimeClause + `
+	  AND pathname != ''
+	  AND site_id = ?` + timeClause + `
 	`
-	rows, err := r.db.QueryContext(ctx, vitalsQuery, siteKey, siteKey, from, from, to, to, to, to)
+	args := append([]any{siteKey}, timeArgs...)
+	rows, err := r.db.QueryContext(ctx, vitalsQuery, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -280,15 +388,13 @@ func (r *SqliteRepository) GetPagePerformance(ctx context.Context, siteKey, from
 	rows.Close()
 
 	trafficQuery := `
-	SELECT url, COUNT(*) AS pageviews
+	SELECT pathname, COUNT(*) AS pageviews
 	FROM events
 	WHERE event_name = '$pageview'
-	  AND ` + siteMatchClause + `
-	  AND ` + fromTimeClause + `
-	  AND ` + toTimeClause + `
-	GROUP BY url
+	  AND site_id = ?` + timeClause + `
+	GROUP BY pathname
 	`
-	trafficRows, err := r.db.QueryContext(ctx, trafficQuery, siteKey, siteKey, from, from, to, to, to, to)
+	trafficRows, err := r.db.QueryContext(ctx, trafficQuery, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -385,6 +491,10 @@ func (r *SqliteRepository) GetPerformanceScore(ctx context.Context, siteKey, fro
 }
 
 func (r *SqliteRepository) GetCustomEvents(ctx context.Context, siteKey, from, to string) (*core.CustomEventsResult, error) {
+	timeClause, timeArgs, err := r.analyticsWindow(ctx, siteKey, from, to)
+	if err != nil {
+		return nil, err
+	}
 	summaryQuery := `
 	SELECT
 		COUNT(*) AS total_events,
@@ -393,24 +503,14 @@ func (r *SqliteRepository) GetCustomEvents(ctx context.Context, siteKey, from, t
 	FROM events
 	WHERE event_name != ''
 	  AND event_name NOT LIKE '$%'
-	  AND ` + siteMatchClause + `
-	  AND ` + fromTimeClause + `
-	  AND ` + toTimeClause + `
+	  AND site_id = ?` + timeClause + `
 	`
 	var summary core.CustomEventSummary
 	var eventSessions int
-	if err := r.db.QueryRowContext(
-		ctx,
-		summaryQuery,
-		siteKey,
-		siteKey,
-		from,
-		from,
-		to,
-		to,
-		to,
-		to,
-	).Scan(&summary.TotalEvents, &summary.UniqueUsers, &eventSessions); err != nil {
+	args := append([]any{siteKey}, timeArgs...)
+	if err := r.db.QueryRowContext(ctx, summaryQuery, args...).Scan(
+		&summary.TotalEvents, &summary.UniqueUsers, &eventSessions,
+	); err != nil {
 		return nil, err
 	}
 
@@ -430,13 +530,11 @@ func (r *SqliteRepository) GetCustomEvents(ctx context.Context, siteKey, from, t
 	FROM events
 	WHERE event_name != ''
 	  AND event_name NOT LIKE '$%'
-	  AND ` + siteMatchClause + `
-	  AND ` + fromTimeClause + `
-	  AND ` + toTimeClause + `
+	  AND site_id = ?` + timeClause + `
 	GROUP BY event_name
 	ORDER BY total_count DESC, event_name ASC
 	`
-	rows, err := r.db.QueryContext(ctx, eventsQuery, siteKey, siteKey, from, from, to, to, to, to)
+	rows, err := r.db.QueryContext(ctx, eventsQuery, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -461,20 +559,23 @@ func (r *SqliteRepository) GetCustomEventTimeSeries(
 	ctx context.Context,
 	siteKey, eventName, from, to string,
 ) ([]core.CustomEventTimeSeriesBucket, error) {
+	timeClause, timeArgs, err := r.analyticsWindow(ctx, siteKey, from, to)
+	if err != nil {
+		return nil, err
+	}
 	query := `
 	SELECT
-		strftime('%Y-%m-%d', timestamp) AS day,
+		local_day AS day,
 		COUNT(*) AS count
 	FROM events
 	WHERE event_name = ?
 	  AND event_name NOT LIKE '$%'
-	  AND ` + siteMatchClause + `
-	  AND ` + fromTimeClause + `
-	  AND ` + toTimeClause + `
+	  AND site_id = ?` + timeClause + `
 	GROUP BY day
 	ORDER BY day ASC
 	`
-	rows, err := r.db.QueryContext(ctx, query, eventName, siteKey, siteKey, from, from, to, to, to, to)
+	args := append([]any{eventName, siteKey}, timeArgs...)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -492,19 +593,27 @@ func (r *SqliteRepository) GetCustomEventTimeSeries(
 }
 
 func (r *SqliteRepository) GetPageviewsTimeSeries(ctx context.Context, siteKey, from, to string) ([]core.TimeSeriesBucket, error) {
+	if dayClause, dayArgs, ok, err := r.projectionDayWindow(ctx, from, to); err != nil {
+		return nil, err
+	} else if ok {
+		return r.projectedTimeSeries(ctx, "daily_site_metrics", "SUM(pageviews)", siteKey, dayClause, dayArgs)
+	}
+	timeClause, timeArgs, err := r.analyticsWindow(ctx, siteKey, from, to)
+	if err != nil {
+		return nil, err
+	}
 	query := `
 	SELECT
-		strftime('%Y-%m-%d', timestamp) AS day,
+		local_day AS day,
 		COUNT(*)                        AS pageviews
 	FROM events
 	WHERE event_name = '$pageview'
-	  AND ` + siteMatchClause + `
-	  AND ` + fromTimeClause + `
-	  AND ` + toTimeClause + `
+	  AND site_id = ?` + timeClause + `
 	GROUP BY day
 	ORDER BY day ASC
 	`
-	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to)
+	args := append([]any{siteKey}, timeArgs...)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -522,19 +631,27 @@ func (r *SqliteRepository) GetPageviewsTimeSeries(ctx context.Context, siteKey, 
 }
 
 func (r *SqliteRepository) GetUniqueVisitorsTimeSeries(ctx context.Context, siteKey, from, to string) ([]core.TimeSeriesBucket, error) {
+	if dayClause, dayArgs, ok, err := r.projectionDayWindow(ctx, from, to); err != nil {
+		return nil, err
+	} else if ok {
+		return r.projectedTimeSeries(ctx, "daily_visitors", "COUNT(*)", siteKey, dayClause, dayArgs)
+	}
+	timeClause, timeArgs, err := r.analyticsWindow(ctx, siteKey, from, to)
+	if err != nil {
+		return nil, err
+	}
 	query := `
 	SELECT
-		strftime('%Y-%m-%d', timestamp) AS day,
+		local_day AS day,
 		COUNT(DISTINCT visitor_id)      AS unique_visitors
 	FROM events
 	WHERE event_name = '$pageview'
-	  AND ` + siteMatchClause + `
-	  AND ` + fromTimeClause + `
-	  AND ` + toTimeClause + `
+	  AND site_id = ?` + timeClause + `
 	GROUP BY day
 	ORDER BY day ASC
 	`
-	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to)
+	args := append([]any{siteKey}, timeArgs...)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -552,19 +669,27 @@ func (r *SqliteRepository) GetUniqueVisitorsTimeSeries(ctx context.Context, site
 }
 
 func (r *SqliteRepository) GetSessionsTimeSeries(ctx context.Context, siteKey, from, to string) ([]core.TimeSeriesBucket, error) {
+	if dayClause, dayArgs, ok, err := r.projectionDayWindow(ctx, from, to); err != nil {
+		return nil, err
+	} else if ok {
+		return r.projectedTimeSeries(ctx, "daily_sessions", "COUNT(*)", siteKey, dayClause, dayArgs)
+	}
+	timeClause, timeArgs, err := r.analyticsWindow(ctx, siteKey, from, to)
+	if err != nil {
+		return nil, err
+	}
 	query := `
 	SELECT
-		strftime('%Y-%m-%d', timestamp) AS day,
+		local_day AS day,
 		COUNT(DISTINCT session_id)       AS sessions
 	FROM events
 	WHERE event_name = '$pageview'
-	  AND ` + siteMatchClause + `
-	  AND ` + fromTimeClause + `
-	  AND ` + toTimeClause + `
+	  AND site_id = ?` + timeClause + `
 	GROUP BY day
 	ORDER BY day ASC
 	`
-	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to)
+	args := append([]any{siteKey}, timeArgs...)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -581,7 +706,44 @@ func (r *SqliteRepository) GetSessionsTimeSeries(ctx context.Context, siteKey, f
 	return results, rows.Err()
 }
 
+func (r *SqliteRepository) projectedTimeSeries(
+	ctx context.Context,
+	table, aggregate, siteID, dayClause string,
+	dayArgs []any,
+) ([]core.TimeSeriesBucket, error) {
+	query := "SELECT day, " + aggregate + " FROM " + table +
+		" WHERE site_id = ?" + dayClause + " GROUP BY day ORDER BY day ASC"
+	args := append([]any{siteID}, dayArgs...)
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var results []core.TimeSeriesBucket
+	for rows.Next() {
+		var bucket core.TimeSeriesBucket
+		var value int
+		if err := rows.Scan(&bucket.Date, &value); err != nil {
+			return nil, err
+		}
+		switch table {
+		case "daily_site_metrics":
+			bucket.Pageviews = value
+		case "daily_visitors":
+			bucket.UniqueVisitors = value
+		case "daily_sessions":
+			bucket.Sessions = value
+		}
+		results = append(results, bucket)
+	}
+	return results, rows.Err()
+}
+
 func (r *SqliteRepository) GetDevices(ctx context.Context, siteKey, from, to string) ([]core.DeviceStat, error) {
+	timeClause, timeArgs, err := r.analyticsWindow(ctx, siteKey, from, to)
+	if err != nil {
+		return nil, err
+	}
 	query := `
 	SELECT
 		CASE
@@ -592,13 +754,12 @@ func (r *SqliteRepository) GetDevices(ctx context.Context, siteKey, from, to str
 		COUNT(*) AS count
 	FROM events
 	WHERE event_name = '$pageview'
-	  AND ` + siteMatchClause + `
-	  AND ` + fromTimeClause + `
-	  AND ` + toTimeClause + `
+	  AND site_id = ?` + timeClause + `
 	GROUP BY device
 	ORDER BY count DESC
 	`
-	rows, err := r.db.QueryContext(ctx, query, siteKey, siteKey, from, from, to, to, to, to)
+	args := append([]any{siteKey}, timeArgs...)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -618,13 +779,17 @@ func (r *SqliteRepository) GetDevices(ctx context.Context, siteKey, from, to str
 func (r *SqliteRepository) GetSites(ctx context.Context) ([]core.SiteStat, error) {
 	query := `
 	SELECT
-		COALESCE(NULLIF(site_id, ''), domain) AS effective_site_id,
-		MIN(domain) AS primary_domain,
-		GROUP_CONCAT(DISTINCT domain) AS domains_csv
-	FROM events
-	WHERE domain != ''
-	GROUP BY effective_site_id
-	ORDER BY effective_site_id ASC
+		s.id,
+		s.name,
+		COALESCE(MAX(CASE WHEN d.is_primary = 1 THEN d.hostname END), MIN(d.hostname), ''),
+		COALESCE(GROUP_CONCAT(d.hostname), ''),
+		s.timezone,
+		s.retention_days
+	FROM sites s
+	LEFT JOIN site_domains d ON d.site_id = s.id
+	WHERE s.disabled_at_us IS NULL
+	GROUP BY s.id, s.name, s.timezone, s.retention_days
+	ORDER BY s.id ASC
 	`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -636,27 +801,15 @@ func (r *SqliteRepository) GetSites(ctx context.Context) ([]core.SiteStat, error
 	for rows.Next() {
 		var s core.SiteStat
 		var domainsCSV string
-		if err := rows.Scan(&s.SiteID, &s.Domain, &domainsCSV); err != nil {
+		if err := rows.Scan(
+			&s.SiteID, &s.Name, &s.Domain, &domainsCSV, &s.Timezone, &s.RetentionDays,
+		); err != nil {
 			return nil, err
 		}
 		s.Domains = splitDomains(domainsCSV)
 		results = append(results, s)
 	}
 	return results, rows.Err()
-}
-
-func normalizeReferrer(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return ""
-	}
-
-	parsed, err := url.Parse(raw)
-	if err == nil && parsed.Hostname() != "" {
-		return strings.TrimPrefix(strings.ToLower(parsed.Hostname()), "www.")
-	}
-
-	return strings.TrimPrefix(strings.ToLower(raw), "www.")
 }
 
 func percentile75(values []float64) float64 {

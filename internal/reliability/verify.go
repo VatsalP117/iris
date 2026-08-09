@@ -230,7 +230,16 @@ func VerifyAggregates(ctx context.Context, config Config, manifest []PlannedEven
 		expectedStats.Pageviews++
 		visitors[planned.Event.VisitorID] = struct{}{}
 		sessions[planned.Event.SessionID] = struct{}{}
-		expectedPages[planned.Event.URL]++
+		pathname := planned.Event.Pathname
+		if pathname == "" {
+			if parsed, err := url.Parse(planned.Event.URL); err == nil {
+				pathname = parsed.EscapedPath()
+			}
+			if pathname == "" {
+				pathname = "/"
+			}
+		}
+		expectedPages[pathname]++
 		expectedDevices[deviceForWidth(planned.Event.ScreenWidth)]++
 		host := normalizeLabReferrer(planned.Event.Referrer)
 		if host != "" {

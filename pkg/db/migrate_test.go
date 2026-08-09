@@ -23,6 +23,8 @@ func TestNewSqliteDB_CreatesVersionedV2Schema(t *testing.T) {
 		"daily_site_metrics",
 		"daily_page_metrics",
 		"daily_referrer_visitors",
+		"daily_visitors",
+		"daily_sessions",
 		"projection_checkpoints",
 	} {
 		var found string
@@ -37,8 +39,8 @@ func TestNewSqliteDB_CreatesVersionedV2Schema(t *testing.T) {
 	if err := repo.db.QueryRow("SELECT MAX(version) FROM schema_migrations").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 1 {
-		t.Fatalf("schema version = %d, want 1", version)
+	if version != 2 {
+		t.Fatalf("schema version = %d, want 2", version)
 	}
 }
 

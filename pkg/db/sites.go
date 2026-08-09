@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -56,6 +55,9 @@ func (r *SqliteRepository) CreateSite(ctx context.Context, site *core.Site) erro
 	`, siteID, name, timezone, retentionDays, now); err != nil {
 		return err
 	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM site_domains WHERE site_id = ?", siteID); err != nil {
+		return err
+	}
 	for index, domain := range domains {
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO site_domains(site_id, hostname, is_primary, created_at_us)
@@ -105,7 +107,6 @@ func normalizedDomains(domains []string) []string {
 		seen[domain] = struct{}{}
 		result = append(result, domain)
 	}
-	sort.Strings(result)
 	return result
 }
 

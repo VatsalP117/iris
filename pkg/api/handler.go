@@ -415,6 +415,21 @@ func (h *Handler) Sites(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	status, err := h.Repo.GetSystemStatus(r.Context())
+	if err != nil {
+		log.Printf("[Status] database error: %v", err)
+		http.Error(w, "Unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
 func previousPeriod(from, to string) (string, string, bool) {
 	start, ok := parsePeriodTime(from, false)
 	if !ok {

@@ -93,14 +93,17 @@ func (r *SqliteRepository) Insert(ctx context.Context, e *core.Event) error {
 		return fmt.Errorf("encode event properties: %w", err)
 	}
 	prepareEventTimes(e)
+	if err := r.prepareEventLocalDay(ctx, e); err != nil {
+		return err
+	}
 
 	query := `
 	INSERT INTO events (
 		id, event_name, site_id, occurred_at_us, received_at_us, timestamp,
 		url, domain, pathname, referrer, referrer_host, screen_width,
-		session_id, visitor_id, properties, schema_version, sdk_version
+		session_id, visitor_id, properties, schema_version, sdk_version, local_day
 	)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(id) DO NOTHING
 	`
 
@@ -122,6 +125,7 @@ func (r *SqliteRepository) Insert(ctx context.Context, e *core.Event) error {
 		string(propsJSON),
 		e.SchemaVersion,
 		e.SDKVersion,
+		e.LocalDay,
 	)
 
 	return err
@@ -140,6 +144,27 @@ func (r *SqliteRepository) InsertBatch(ctx context.Context, events []*core.Event
 	if err := r.requireSites(ctx, events); err != nil {
 		return err
 	}
+	properties := make([][]byte, len(events))
+	locations := map[string]*time.Location{}
+	for index, event := range events {
+		propsJSON, err := json.Marshal(event.Properties)
+		if err != nil {
+			return fmt.Errorf("encode event properties: %w", err)
+		}
+		prepareEventTimes(event)
+		if event.LocalDay == "" {
+			location := locations[event.SiteID]
+			if location == nil {
+				location, err = r.siteLocation(ctx, event.SiteID)
+				if err != nil {
+					return err
+				}
+				locations[event.SiteID] = location
+			}
+			event.LocalDay = event.Timestamp.In(location).Format(time.DateOnly)
+		}
+		properties[index] = propsJSON
+	}
 	tx, err := r.writer.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -150,9 +175,9 @@ func (r *SqliteRepository) InsertBatch(ctx context.Context, events []*core.Event
 	INSERT INTO events (
 		id, event_name, site_id, occurred_at_us, received_at_us, timestamp,
 		url, domain, pathname, referrer, referrer_host, screen_width,
-		session_id, visitor_id, properties, schema_version, sdk_version
+		session_id, visitor_id, properties, schema_version, sdk_version, local_day
 	)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(id) DO NOTHING
 	`)
 	if err != nil {
@@ -160,13 +185,7 @@ func (r *SqliteRepository) InsertBatch(ctx context.Context, events []*core.Event
 	}
 	defer stmt.Close()
 
-	for _, e := range events {
-		propsJSON, err := json.Marshal(e.Properties)
-		if err != nil {
-			return fmt.Errorf("encode event properties: %w", err)
-		}
-		prepareEventTimes(e)
-
+	for index, e := range events {
 		_, err = stmt.ExecContext(ctx,
 			e.ID,
 			e.EventName,
@@ -182,9 +201,10 @@ func (r *SqliteRepository) InsertBatch(ctx context.Context, events []*core.Event
 			e.ScreenWidth,
 			e.SessionID,
 			e.VisitorID,
-			string(propsJSON),
+			string(properties[index]),
 			e.SchemaVersion,
 			e.SDKVersion,
+			e.LocalDay,
 		)
 		if err != nil {
 			return err
@@ -233,4 +253,28 @@ func prepareEventTimes(event *core.Event) {
 	if event.SchemaVersion <= 0 {
 		event.SchemaVersion = 1
 	}
+}
+
+func (r *SqliteRepository) prepareEventLocalDay(ctx context.Context, event *core.Event) error {
+	if event.LocalDay != "" {
+		return nil
+	}
+	location, err := r.siteLocation(ctx, event.SiteID)
+	if err != nil {
+		return err
+	}
+	event.LocalDay = event.Timestamp.In(location).Format(time.DateOnly)
+	return nil
+}
+
+func (r *SqliteRepository) siteLocation(ctx context.Context, siteID string) (*time.Location, error) {
+	var timezone string
+	if err := r.db.QueryRowContext(ctx, "SELECT timezone FROM sites WHERE id = ?", siteID).Scan(&timezone); err != nil {
+		return nil, fmt.Errorf("read site timezone: %w", err)
+	}
+	location, err := time.LoadLocation(timezone)
+	if err != nil {
+		return nil, fmt.Errorf("load site timezone %q: %w", timezone, err)
+	}
+	return location, nil
 }

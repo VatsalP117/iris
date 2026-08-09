@@ -26,6 +26,7 @@ type Event struct {
 	ReceivedAt    time.Time      `json:"-"             db:"received_at"`
 	Pathname      string         `json:"-"             db:"pathname"`
 	ReferrerHost  string         `json:"-"             db:"referrer_host"`
+	LocalDay      string         `json:"-"             db:"local_day"`
 	SchemaVersion int            `json:"v,omitempty"   db:"schema_version"`
 	SDKVersion    string         `json:"sv,omitempty"  db:"sdk_version"`
 }
@@ -36,6 +37,13 @@ type Site struct {
 	Timezone      string   `json:"timezone"`
 	RetentionDays int      `json:"retention_days"`
 	Domains       []string `json:"domains"`
+}
+
+type SystemStatus struct {
+	Database          string `json:"database"`
+	ProjectionLastSeq int64  `json:"projection_last_seq"`
+	EventLastSeq      int64  `json:"event_last_seq"`
+	ProjectionLag     int64  `json:"projection_lag"`
 }
 
 type StatsResult struct {
@@ -142,6 +150,7 @@ type TimeSeriesBucket struct {
 type EventRepository interface {
 	CreateSite(ctx context.Context, site *Site) error
 	ValidateSite(ctx context.Context, siteID, domain string) error
+	GetSystemStatus(ctx context.Context) (*SystemStatus, error)
 	Insert(ctx context.Context, event *Event) error
 	InsertBatch(ctx context.Context, events []*Event) error
 	GetStats(ctx context.Context, siteKey, from, to string) (*StatsResult, error)

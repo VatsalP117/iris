@@ -22,6 +22,7 @@ type migration struct {
 
 var migrations = []migration{
 	{version: 1, name: "v2_schema", file: "migrations/001_v2_schema.sql"},
+	{version: 2, name: "local_day_sets", file: "migrations/002_local_day_sets.sql"},
 }
 
 func migrate(ctx context.Context, database *sql.DB) error {
