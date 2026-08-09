@@ -378,6 +378,14 @@ func newTestRepo(t *testing.T) *SqliteRepository {
 	t.Cleanup(func() {
 		_ = repo.Close()
 	})
+	for _, site := range []core.Site{
+		{ID: "site-a", Name: "Site A", Domains: []string{"example.com", "www.example.com"}},
+		{ID: "site-b", Name: "Site B", Domains: []string{"other.com"}},
+	} {
+		if err := repo.CreateSite(context.Background(), &site); err != nil {
+			t.Fatalf("CreateSite returned error: %v", err)
+		}
+	}
 
 	return repo
 }

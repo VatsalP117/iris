@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/VatsalP117/iris/pkg/core"
 	_ "github.com/mattn/go-sqlite3"
@@ -43,31 +45,23 @@ func (r *SqliteRepository) ResetGrowthPageLimit(ctx context.Context) error {
 }
 
 func NewSqliteDB(filepath string) (*SqliteRepository, error) {
-	db, err := sql.Open("sqlite3", filepath)
+	dsn := filepath
+	separator := "?"
+	if strings.Contains(dsn, "?") {
+		separator = "&"
+	}
+	dsn += separator + "_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL"
+
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, err
 	}
-
-	query := `
-	CREATE TABLE IF NOT EXISTS events (
-		id          TEXT PRIMARY KEY,
-		event_name  TEXT,
-		url         TEXT,
-		domain      TEXT,
-		referrer    TEXT,
-		screen_width INTEGER,
-		site_id     TEXT,
-		session_id  TEXT,
-		visitor_id  TEXT,
-		properties  TEXT,
-		timestamp   DATETIME
-	);
-	CREATE INDEX IF NOT EXISTS idx_events_domain    ON events(domain);
-	CREATE INDEX IF NOT EXISTS idx_events_site_id   ON events(site_id);
-	CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
-	`
-	_, err = db.Exec(query)
-	if err != nil {
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := migrate(context.Background(), db); err != nil {
+		db.Close()
 		return nil, err
 	}
 
@@ -75,28 +69,43 @@ func NewSqliteDB(filepath string) (*SqliteRepository, error) {
 }
 
 func (r *SqliteRepository) Insert(ctx context.Context, e *core.Event) error {
-	propsJson, err := json.Marshal(e.Properties)
-	if err != nil {
-		propsJson = []byte("{}")
+	if err := r.requireSites(ctx, []*core.Event{e}); err != nil {
+		return err
 	}
+	propsJSON, err := json.Marshal(e.Properties)
+	if err != nil {
+		return fmt.Errorf("encode event properties: %w", err)
+	}
+	prepareEventTimes(e)
 
 	query := `
-	INSERT OR IGNORE INTO events (id, event_name, url, domain, referrer, screen_width, site_id, session_id, visitor_id, properties, timestamp)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO events (
+		id, event_name, site_id, occurred_at_us, received_at_us, timestamp,
+		url, domain, pathname, referrer, referrer_host, screen_width,
+		session_id, visitor_id, properties, schema_version, sdk_version
+	)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(id) DO NOTHING
 	`
 
 	_, err = r.db.ExecContext(ctx, query,
 		e.ID,
 		e.EventName,
+		e.SiteID,
+		e.Timestamp.UnixMicro(),
+		e.ReceivedAt.UnixMicro(),
+		e.Timestamp,
 		e.URL,
 		e.Domain,
+		e.Pathname,
 		e.Referrer,
+		e.ReferrerHost,
 		e.ScreenWidth,
-		e.SiteID,
 		e.SessionID,
 		e.VisitorID,
-		string(propsJson),
-		e.Timestamp,
+		string(propsJSON),
+		e.SchemaVersion,
+		e.SDKVersion,
 	)
 
 	return err
@@ -107,6 +116,9 @@ func (r *SqliteRepository) Close() error {
 }
 
 func (r *SqliteRepository) InsertBatch(ctx context.Context, events []*core.Event) error {
+	if err := r.requireSites(ctx, events); err != nil {
+		return err
+	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -114,8 +126,13 @@ func (r *SqliteRepository) InsertBatch(ctx context.Context, events []*core.Event
 	defer tx.Rollback()
 
 	stmt, err := tx.PrepareContext(ctx, `
-	INSERT OR IGNORE INTO events (id, event_name, url, domain, referrer, screen_width, site_id, session_id, visitor_id, properties, timestamp)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO events (
+		id, event_name, site_id, occurred_at_us, received_at_us, timestamp,
+		url, domain, pathname, referrer, referrer_host, screen_width,
+		session_id, visitor_id, properties, schema_version, sdk_version
+	)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(id) DO NOTHING
 	`)
 	if err != nil {
 		return err
@@ -123,23 +140,30 @@ func (r *SqliteRepository) InsertBatch(ctx context.Context, events []*core.Event
 	defer stmt.Close()
 
 	for _, e := range events {
-		propsJson, err := json.Marshal(e.Properties)
+		propsJSON, err := json.Marshal(e.Properties)
 		if err != nil {
-			propsJson = []byte("{}")
+			return fmt.Errorf("encode event properties: %w", err)
 		}
+		prepareEventTimes(e)
 
 		_, err = stmt.ExecContext(ctx,
 			e.ID,
 			e.EventName,
+			e.SiteID,
+			e.Timestamp.UnixMicro(),
+			e.ReceivedAt.UnixMicro(),
+			e.Timestamp,
 			e.URL,
 			e.Domain,
+			e.Pathname,
 			e.Referrer,
+			e.ReferrerHost,
 			e.ScreenWidth,
-			e.SiteID,
 			e.SessionID,
 			e.VisitorID,
-			string(propsJson),
-			e.Timestamp,
+			string(propsJSON),
+			e.SchemaVersion,
+			e.SDKVersion,
 		)
 		if err != nil {
 			return err
@@ -147,4 +171,45 @@ func (r *SqliteRepository) InsertBatch(ctx context.Context, events []*core.Event
 	}
 
 	return tx.Commit()
+}
+
+func (r *SqliteRepository) requireSites(ctx context.Context, events []*core.Event) error {
+	checked := map[string]struct{}{}
+	for _, event := range events {
+		if event == nil {
+			return fmt.Errorf("event is required")
+		}
+		if _, ok := checked[event.SiteID]; ok {
+			continue
+		}
+		var exists int
+		err := r.db.QueryRowContext(ctx, `
+			SELECT 1 FROM sites WHERE id = ? AND disabled_at_us IS NULL
+		`, event.SiteID).Scan(&exists)
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("%w: %s", core.ErrSiteNotFound, event.SiteID)
+		}
+		if err != nil {
+			return err
+		}
+		checked[event.SiteID] = struct{}{}
+	}
+	return nil
+}
+
+func prepareEventTimes(event *core.Event) {
+	now := time.Now().UTC()
+	if event.Timestamp.IsZero() {
+		event.Timestamp = now
+	} else {
+		event.Timestamp = event.Timestamp.UTC()
+	}
+	if event.ReceivedAt.IsZero() {
+		event.ReceivedAt = now
+	} else {
+		event.ReceivedAt = event.ReceivedAt.UTC()
+	}
+	if event.SchemaVersion <= 0 {
+		event.SchemaVersion = 1
+	}
 }

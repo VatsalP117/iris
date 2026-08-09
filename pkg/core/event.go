@@ -2,21 +2,37 @@ package core
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
+var ErrSiteNotFound = errors.New("site not found")
+
 type Event struct {
-	ID          string         `json:"id"           db:"id"`
-	EventName   string         `json:"n"            db:"event_name"`
-	URL         string         `json:"u"            db:"url"`
-	Domain      string         `json:"d"            db:"domain"`
-	Referrer    string         `json:"r,omitempty"  db:"referrer"`
-	ScreenWidth int            `json:"w"            db:"screen_width"`
-	SiteID      string         `json:"s"            db:"site_id"`
-	SessionID   string         `json:"sid"          db:"session_id"`
-	VisitorID   string         `json:"vid"          db:"visitor_id"`
-	Properties  map[string]any `json:"p,omitempty"  db:"properties"`
-	Timestamp   time.Time      `json:"ts"           db:"timestamp"`
+	ID            string         `json:"id"           db:"id"`
+	EventName     string         `json:"n"            db:"event_name"`
+	URL           string         `json:"u"            db:"url"`
+	Domain        string         `json:"d"            db:"domain"`
+	Referrer      string         `json:"r,omitempty"  db:"referrer"`
+	ScreenWidth   int            `json:"w"            db:"screen_width"`
+	SiteID        string         `json:"s"            db:"site_id"`
+	SessionID     string         `json:"sid"          db:"session_id"`
+	VisitorID     string         `json:"vid"          db:"visitor_id"`
+	Properties    map[string]any `json:"p,omitempty"  db:"properties"`
+	Timestamp     time.Time      `json:"ts,omitempty" db:"timestamp"`
+	ReceivedAt    time.Time      `json:"-"             db:"received_at"`
+	Pathname      string         `json:"-"             db:"pathname"`
+	ReferrerHost  string         `json:"-"             db:"referrer_host"`
+	SchemaVersion int            `json:"v,omitempty"   db:"schema_version"`
+	SDKVersion    string         `json:"sv,omitempty"  db:"sdk_version"`
+}
+
+type Site struct {
+	ID            string   `json:"site_id"`
+	Name          string   `json:"name"`
+	Timezone      string   `json:"timezone"`
+	RetentionDays int      `json:"retention_days"`
+	Domains       []string `json:"domains"`
 }
 
 type StatsResult struct {
@@ -118,6 +134,7 @@ type TimeSeriesBucket struct {
 }
 
 type EventRepository interface {
+	CreateSite(ctx context.Context, site *Site) error
 	Insert(ctx context.Context, event *Event) error
 	InsertBatch(ctx context.Context, events []*Event) error
 	GetStats(ctx context.Context, siteKey, from, to string) (*StatsResult, error)

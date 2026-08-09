@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/VatsalP117/iris/pkg/core"
 	"github.com/VatsalP117/iris/pkg/db"
 )
 
@@ -19,6 +20,11 @@ func TestTrackEvent_DuplicateClientIDIsIdempotent(t *testing.T) {
 	t.Cleanup(func() {
 		_ = repo.Close()
 	})
+	if err := repo.CreateSite(context.Background(), &core.Site{
+		ID: "site-a", Name: "Site A", Domains: []string{"example.com"},
+	}); err != nil {
+		t.Fatalf("CreateSite returned error: %v", err)
+	}
 
 	handler := NewHandler(repo)
 	body := []byte(`{
