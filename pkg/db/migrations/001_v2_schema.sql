@@ -106,4 +106,3 @@ CREATE TABLE projection_checkpoints (
     version           INTEGER NOT NULL,
     updated_at_us     INTEGER NOT NULL
 );
-
