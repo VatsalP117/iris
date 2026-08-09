@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Menu, X, ChevronRight, ExternalLink } from 'lucide-react';
 
 const sections = [
@@ -72,6 +73,18 @@ const Callout = ({ type, children }: { type: 'tip' | 'warning' | 'info'; childre
 
 export default function Docs() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { hash } = useLocation();
+
+  // Scroll to the section referenced by the URL hash (e.g. /docs#self-hosting).
+  // Client-side navigation via <Link> does not trigger the browser's native
+  // scroll-to-fragment behavior, so handle it here.
+  useEffect(() => {
+    if (!hash) return;
+    const el = document.getElementById(hash.slice(1));
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [hash]);
 
   return (
     <div className="docs-page min-h-screen flex pt-[72px]">

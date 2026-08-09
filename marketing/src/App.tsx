@@ -72,10 +72,10 @@ function Nav() {
                 </div>
 
                 <div className="nav-actions">
-                    <a href="/docs#self-hosting" className="button button--dark button--small">
+                    <Link to="/docs#self-hosting" className="button button--dark button--small">
                         Deploy Iris
                         <ArrowRight size={15} />
-                    </a>
+                    </Link>
                 </div>
 
                 <button
@@ -95,9 +95,9 @@ function Nav() {
                     <a href="/#privacy" onClick={() => setIsOpen(false)}>Privacy</a>
                     <a href="/#developers" onClick={() => setIsOpen(false)}>Developers</a>
                     <Link to="/docs" onClick={() => setIsOpen(false)}>Docs</Link>
-                    <a href="/docs#self-hosting" className="button button--dark" onClick={() => setIsOpen(false)}>
+                    <Link to="/docs#self-hosting" className="button button--dark" onClick={() => setIsOpen(false)}>
                         Deploy Iris
-                    </a>
+                    </Link>
                 </div>
             )}
         </nav>
