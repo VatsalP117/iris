@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
 	"math"
 	"net/http"
@@ -9,7 +11,6 @@ import (
 	"time"
 
 	"github.com/VatsalP117/iris/pkg/core"
-	"github.com/google/uuid"
 )
 
 type Handler struct {
@@ -48,6 +49,11 @@ func parseStatsQuery(w http.ResponseWriter, r *http.Request) (statsQuery, bool) 
 const maxBodyBytes = 1 << 20 // 1 MiB
 
 func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	var event core.Event
 	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
@@ -56,13 +62,9 @@ func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if event.ID == "" {
-		event.ID = uuid.NewString()
-	}
-	event.Timestamp = time.Now().UTC()
-
-	if event.Properties != nil {
-		event.Properties = truncateStrings(event.Properties, 200).(map[string]any)
+	if err := h.prepareIncomingEvent(r.Context(), &event, time.Now().UTC()); err != nil {
+		writeIngestError(w, err)
+		return
 	}
 
 	if err := h.Repo.Insert(r.Context(), &event); err != nil {
@@ -78,6 +80,11 @@ func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {
 const maxBatchSize = 50
 
 func (h *Handler) TrackBatchEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	var events []core.Event
 	if err := json.NewDecoder(r.Body).Decode(&events); err != nil {
@@ -99,12 +106,9 @@ func (h *Handler) TrackBatchEvents(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	ptrs := make([]*core.Event, len(events))
 	for i := range events {
-		if events[i].ID == "" {
-			events[i].ID = uuid.NewString()
-		}
-		events[i].Timestamp = now
-		if events[i].Properties != nil {
-			events[i].Properties = truncateStrings(events[i].Properties, 200).(map[string]any)
+		if err := h.prepareIncomingEvent(r.Context(), &events[i], now); err != nil {
+			writeIngestError(w, fmt.Errorf("event %d: %w", i, err))
+			return
 		}
 		ptrs[i] = &events[i]
 	}
@@ -117,6 +121,16 @@ func (h *Handler) TrackBatchEvents(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[TrackBatchEvents] OK: %d events ingested", len(events))
 	w.WriteHeader(http.StatusAccepted)
+}
+
+func writeIngestError(w http.ResponseWriter, err error) {
+	status := http.StatusBadRequest
+	if errors.Is(err, core.ErrSiteNotFound) {
+		status = http.StatusNotFound
+	} else if errors.Is(err, core.ErrDomainNotAllowed) {
+		status = http.StatusForbidden
+	}
+	http.Error(w, err.Error(), status)
 }
 
 func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
@@ -372,6 +386,33 @@ func (h *Handler) ListSites(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) Sites(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.ListSites(w, r)
+	case http.MethodPost:
+		r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+		var site core.Site
+		if err := json.NewDecoder(r.Body).Decode(&site); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if len(site.ID) > maxIdentifierLength || len(site.Name) > 200 || len(site.Domains) > 20 {
+			http.Error(w, "Invalid site configuration", http.StatusBadRequest)
+			return
+		}
+		if err := h.Repo.CreateSite(r.Context(), &site); err != nil {
+			log.Printf("[Sites] create error: %v", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusCreated, site)
+	default:
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func previousPeriod(from, to string) (string, string, bool) {

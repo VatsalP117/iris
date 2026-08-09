@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sort"
 	"strings"
@@ -35,6 +36,9 @@ func (r *SqliteRepository) CreateSite(ctx context.Context, site *core.Site) erro
 	}
 
 	domains := normalizedDomains(site.Domains)
+	if len(domains) == 0 {
+		return fmt.Errorf("at least one domain is required")
+	}
 	now := time.Now().UTC().UnixMicro()
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -62,6 +66,28 @@ func (r *SqliteRepository) CreateSite(ctx context.Context, site *core.Site) erro
 		}
 	}
 	return tx.Commit()
+}
+
+func (r *SqliteRepository) ValidateSite(ctx context.Context, siteID, domain string) error {
+	siteID = strings.TrimSpace(siteID)
+	domain = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(domain)), ".")
+	var exists int
+	err := r.db.QueryRowContext(ctx, `
+		SELECT 1 FROM sites WHERE id = ? AND disabled_at_us IS NULL
+	`, siteID).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("%w: %s", core.ErrSiteNotFound, siteID)
+	}
+	if err != nil {
+		return err
+	}
+	err = r.db.QueryRowContext(ctx, `
+		SELECT 1 FROM site_domains WHERE site_id = ? AND hostname = ?
+	`, siteID, domain).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("%w: %s", core.ErrDomainNotAllowed, domain)
+	}
+	return err
 }
 
 func normalizedDomains(domains []string) []string {

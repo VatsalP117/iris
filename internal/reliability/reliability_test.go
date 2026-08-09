@@ -261,7 +261,7 @@ func TestRunSupportsDeterministicRateStages(t *testing.T) {
 func registerLabSite(t *testing.T, repo *db.SqliteRepository, siteID string) {
 	t.Helper()
 	if err := repo.CreateSite(context.Background(), &core.Site{
-		ID: siteID, Name: siteID, Domains: []string{"example.test"},
+		ID: siteID, Name: siteID, Domains: []string{"lab.example"},
 	}); err != nil {
 		t.Fatalf("CreateSite returned error: %v", err)
 	}

@@ -6,7 +6,10 @@ import (
 	"time"
 )
 
-var ErrSiteNotFound = errors.New("site not found")
+var (
+	ErrSiteNotFound     = errors.New("site not found")
+	ErrDomainNotAllowed = errors.New("domain not allowed")
+)
 
 type Event struct {
 	ID            string         `json:"id"           db:"id"`
@@ -121,9 +124,12 @@ type DeviceStat struct {
 }
 
 type SiteStat struct {
-	SiteID  string   `json:"site_id"`
-	Domain  string   `json:"domain"`
-	Domains []string `json:"domains,omitempty"`
+	SiteID        string   `json:"site_id"`
+	Name          string   `json:"name"`
+	Domain        string   `json:"domain"`
+	Domains       []string `json:"domains,omitempty"`
+	Timezone      string   `json:"timezone"`
+	RetentionDays int      `json:"retention_days"`
 }
 
 type TimeSeriesBucket struct {
@@ -135,6 +141,7 @@ type TimeSeriesBucket struct {
 
 type EventRepository interface {
 	CreateSite(ctx context.Context, site *Site) error
+	ValidateSite(ctx context.Context, siteID, domain string) error
 	Insert(ctx context.Context, event *Event) error
 	InsertBatch(ctx context.Context, events []*Event) error
 	GetStats(ctx context.Context, siteKey, from, to string) (*StatsResult, error)

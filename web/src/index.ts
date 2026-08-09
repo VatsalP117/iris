@@ -4,6 +4,8 @@ import { initAutoCapture } from "./autocapture";
 import { initVitals } from "./vitals";
 import { generateId, getVisitorIdentity, getSessionId } from "./storage";
 
+const SDK_VERSION = "1.0.0";
+
 // Module-level state prevents multiple Iris instances from duplicating pageviews.
 let pushStatePatched = false;
 const pageviewInstances = new Set<Iris>();
@@ -69,6 +71,9 @@ export class Iris {
       s: this.config.siteId,
       sid: getSessionId(),
       p: props as Record<string, any> | undefined,
+      ts: new Date().toISOString(),
+      v: 1,
+      sv: SDK_VERSION,
     };
     this.pendingVisitorEvents.add(payload);
     this.attachIdentityLifecycleListeners();

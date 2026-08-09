@@ -141,10 +141,11 @@ func VerifyStorage(ctx context.Context, dbPath string, manifest []PlannedEvent, 
 
 func storedMatches(planned PlannedEvent, stored storedEvent) bool {
 	expected := planned.Event
+	expectedReferrer := sanitizedLabURL(expected.Referrer)
 	if stored.EventName != expected.EventName ||
 		stored.URL != expected.URL ||
 		stored.Domain != expected.Domain ||
-		stored.Referrer != expected.Referrer ||
+		stored.Referrer != expectedReferrer ||
 		stored.ScreenWidth != expected.ScreenWidth ||
 		stored.SiteID != expected.SiteID ||
 		stored.SessionID != expected.SessionID ||
@@ -155,6 +156,20 @@ func storedMatches(planned PlannedEvent, stored storedEvent) bool {
 	return propertyString(stored.Properties, "$test_run") == propertyString(expected.Properties, "$test_run") &&
 		propertyInt(stored.Properties, "$test_seq") == planned.Sequence &&
 		propertyString(stored.Properties, "$test_flow") == propertyString(expected.Properties, "$test_flow")
+}
+
+func sanitizedLabURL(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	parsed.RawQuery = ""
+	parsed.ForceQuery = false
+	parsed.Fragment = ""
+	return parsed.String()
 }
 
 func propertyString(properties map[string]any, key string) string {

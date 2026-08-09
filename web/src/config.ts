@@ -32,4 +32,7 @@ export type EventPayload = {
   sid: string;  // session ID
   vid: string;  // visitor ID (anonymous)
   p?: Record<string, any>; // custom properties
+  ts: string;   // occurrence time, ISO 8601 UTC
+  v: 1;         // wire schema version
+  sv: string;   // SDK version
 };

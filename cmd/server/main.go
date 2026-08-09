@@ -61,7 +61,7 @@ func main() {
 	mux.HandleFunc("/api/timeseries", api.NewCORSMiddleware(handler.GetTimeSeries))
 	mux.HandleFunc("/api/timeseries/visitors", api.NewCORSMiddleware(handler.GetUniqueVisitorsTimeSeries))
 	mux.HandleFunc("/api/timeseries/sessions", api.NewCORSMiddleware(handler.GetSessionsTimeSeries))
-	mux.HandleFunc("/api/sites", api.NewCORSMiddleware(handler.ListSites))
+	mux.HandleFunc("/api/sites", api.NewCORSMiddleware(handler.Sites))
 
 	if os.Getenv("IRIS_LAB_PPROF") == "1" {
 		mux.Handle("/debug/pprof/", http.DefaultServeMux)
