@@ -40,7 +40,7 @@ func (r *SqliteRepository) CreateSite(ctx context.Context, site *core.Site) erro
 		return fmt.Errorf("at least one domain is required")
 	}
 	now := time.Now().UTC().UnixMicro()
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.writer.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}

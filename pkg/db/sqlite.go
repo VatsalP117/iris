@@ -13,7 +13,8 @@ import (
 )
 
 type SqliteRepository struct {
-	db *sql.DB
+	db     *sql.DB
+	writer *sql.DB
 }
 
 // ConstrainGrowthPages limits this database to its current size plus extraPages.
@@ -23,11 +24,11 @@ func (r *SqliteRepository) ConstrainGrowthPages(ctx context.Context, extraPages 
 		return 0, fmt.Errorf("extra pages must be non-negative")
 	}
 	var pageCount int
-	if err := r.db.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pageCount); err != nil {
+	if err := r.writer.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pageCount); err != nil {
 		return 0, err
 	}
 	var appliedLimit int
-	if err := r.db.QueryRowContext(
+	if err := r.writer.QueryRowContext(
 		ctx,
 		fmt.Sprintf("PRAGMA max_page_count = %d", pageCount+extraPages),
 	).Scan(&appliedLimit); err != nil {
@@ -38,7 +39,7 @@ func (r *SqliteRepository) ConstrainGrowthPages(ctx context.Context, extraPages 
 
 func (r *SqliteRepository) ResetGrowthPageLimit(ctx context.Context) error {
 	var appliedLimit int
-	return r.db.QueryRowContext(
+	return r.writer.QueryRowContext(
 		ctx,
 		"PRAGMA max_page_count = 1073741823",
 	).Scan(&appliedLimit)
@@ -52,20 +53,35 @@ func NewSqliteDB(filepath string) (*SqliteRepository, error) {
 	}
 	dsn += separator + "_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL"
 
-	db, err := sql.Open("sqlite3", dsn)
+	writer, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, err
 	}
-	if err := db.Ping(); err != nil {
-		db.Close()
+	writer.SetMaxOpenConns(1)
+	writer.SetMaxIdleConns(1)
+	if err := writer.Ping(); err != nil {
+		writer.Close()
 		return nil, err
 	}
-	if err := migrate(context.Background(), db); err != nil {
-		db.Close()
+	if err := migrate(context.Background(), writer); err != nil {
+		writer.Close()
 		return nil, err
 	}
 
-	return &SqliteRepository{db: db}, nil
+	reader, err := sql.Open("sqlite3", dsn)
+	if err != nil {
+		writer.Close()
+		return nil, err
+	}
+	reader.SetMaxOpenConns(4)
+	reader.SetMaxIdleConns(4)
+	if err := reader.Ping(); err != nil {
+		reader.Close()
+		writer.Close()
+		return nil, err
+	}
+
+	return &SqliteRepository{db: reader, writer: writer}, nil
 }
 
 func (r *SqliteRepository) Insert(ctx context.Context, e *core.Event) error {
@@ -88,7 +104,7 @@ func (r *SqliteRepository) Insert(ctx context.Context, e *core.Event) error {
 	ON CONFLICT(id) DO NOTHING
 	`
 
-	_, err = r.db.ExecContext(ctx, query,
+	_, err = r.writer.ExecContext(ctx, query,
 		e.ID,
 		e.EventName,
 		e.SiteID,
@@ -112,14 +128,19 @@ func (r *SqliteRepository) Insert(ctx context.Context, e *core.Event) error {
 }
 
 func (r *SqliteRepository) Close() error {
-	return r.db.Close()
+	readerErr := r.db.Close()
+	writerErr := r.writer.Close()
+	if readerErr != nil {
+		return readerErr
+	}
+	return writerErr
 }
 
 func (r *SqliteRepository) InsertBatch(ctx context.Context, events []*core.Event) error {
 	if err := r.requireSites(ctx, events); err != nil {
 		return err
 	}
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.writer.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
