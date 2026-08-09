@@ -14,12 +14,17 @@ pnpm add iris-analytics
 
 ## Quick Start
 
+Register `my-site` and its hostname with the backend before starting the SDK.
+Site mutation requires the server's `IRIS_ADMIN_TOKEN`; see the root repository
+README for the authenticated `POST /api/sites` example.
+
 ```ts
 import { Iris } from "iris-analytics";
 
 const analytics = new Iris({
   host: "https://analytics.yourdomain.com",
   siteId: "my-site",
+  timezone: "UTC", // must match the registered site
   autocapture: {
     pageviews: true,
     clicks: true,
@@ -163,12 +168,18 @@ const analytics = new Iris({
 ## Privacy Notes
 
 - No third-party cookies.
-- Visitor IDs are anonymous and rotate daily in UTC.
-- Session IDs are tab-scoped using `sessionStorage`.
+- Visitor IDs are anonymous, isolated per site, and rotate at midnight in the
+  configured site timezone.
+- Session IDs use `localStorage`, are isolated per site, shared across
+  same-origin tabs, and roll after 30 minutes without tracked activity.
+- The backend removes URL/referrer query strings and fragments before storage
+  and requires the event hostname to be registered for the configured site.
 
 ## Backend
 
-This SDK sends events to the Iris backend (`/api/event`, `/api/events`).
+This SDK sends versioned, client-identified events to the Iris backend
+(`/api/event`, `/api/events`). Event IDs make replay idempotent; the transport
+queue itself remains memory-only and best-effort.
 Run the full stack from the main repo:
 
 - Repository: https://github.com/VatsalP117/iris

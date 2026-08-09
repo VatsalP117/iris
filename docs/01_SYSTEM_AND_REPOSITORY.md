@@ -11,7 +11,10 @@ There are two practical human roles, but neither exists as an authenticated doma
 - a **site developer** embeds/configures the SDK;
 - an **analytics operator** opens the dashboard and operates the deployment.
 
-The application has no accounts, teams, roles, billing, site creation workflow, or admin panel. “Users” and “sites” are therefore product concepts, not database records.
+The application has no accounts, teams, roles, billing, or authenticated admin
+panel. Sites are registered database records with allowed domains, timezone, and
+retention policy; registration uses `POST /api/sites` with the server-side
+`IRIS_ADMIN_TOKEN` bearer credential.
 
 ## System context
 
@@ -19,7 +22,7 @@ The application has no accounts, teams, roles, billing, site creation workflow, 
 flowchart LR
     V["Website visitor browser"] -->|"Beacon/fetch JSON"| I["Iris Go server"]
     O["Analytics operator browser"] -->|"GET /api/*"| I
-    I -->|"SQL reads/writes"| D[("SQLite events table")]
+    I -->|"SQL reads/writes"| D[("SQLite control, raw, and projection tables")]
     I -->|"Static files"| O
     M["Marketing visitor"] -->|"HTTPS/static assets"| N["Nginx marketing container"]
     CI["GitHub Actions"] -->|"build/test only"| R["Repository"]
@@ -32,9 +35,9 @@ Text explanation: website visitors cross an origin/network boundary to the inges
 
 | Boundary | Data/authority crossing | Current enforcement |
 |---|---|---|
-| Visitor browser → ingestion API | URLs, referrer, viewport, pseudonymous IDs, arbitrary properties and site ID | Body size and batch-count limits only; no identity, origin allowlist, or field validation |
+| Visitor browser → ingestion API | URLs, referrer, viewport, pseudonymous IDs, arbitrary properties and site ID | Body/batch/field limits, registered site, URL normalization, and hostname allowlist; no secret browser credential |
 | Operator browser → query API | All data selected by caller-provided `site_id` | No authentication or authorization |
-| Go → SQLite | All durable product data | File-system permissions and SQLite primary key only |
+| Go → SQLite | All durable product data | File-system permissions, foreign keys, constraints, unique event IDs, and serialized writes |
 | Internet → marketing | Public static content | Nginx; no app backend |
 | GitHub runner → source | build/test permission | Workflow declares `contents: read` |
 
@@ -45,7 +48,9 @@ Text explanation: website visitors cross an origin/network boundary to the inges
 - **Data:** the mounted SQLite file is the sole durable product state. Browser storage holds only IDs; dashboard state is memory-only.
 - **Failure:** server crash stops ingestion, queries, and dashboard static serving together. Marketing can remain available. Loss of the volume loses analytics.
 - **Deployment:** root `Dockerfile` produces backend+dashboard; `marketing/Dockerfile` produces marketing. The SDK is an npm artifact rather than a running service.
-- **Synchronous/asynchronous:** query and insertion work is synchronous in the Go handler. Beacon/fetch is asynchronous from the page’s perspective. No server-side asynchronous work exists.
+- **Synchronous/asynchronous:** raw insertion is synchronous in the Go handler.
+  Beacon/fetch is asynchronous from the page’s perspective. An in-process
+  maintenance loop projects raw events every 250 ms and enforces retention daily.
 
 ## Container/component view
 
@@ -68,7 +73,7 @@ flowchart TB
     API["duplicated typed API client"]
     UI["views and Recharts"]
   end
-  DB[("events")]
+  DB[("sites + events + projections")]
   A --> S
   A --> T
   T --> M
@@ -83,16 +88,18 @@ flowchart TB
 
 ### Root files
 
-- `README.md` — public quickstart, architecture headline, SDK examples, three backend variables, and selected reporting semantics. Depends on implementation staying aligned. **Risk:** its privacy and production framing is stronger than current enforcement.
+- `README.md` — public quickstart, architecture headline, SDK examples, backend variables, and selected reporting semantics. Depends on implementation staying aligned. **Risk:** its privacy and production framing is stronger than current read/ingest authorization.
 - `Taskfile.yml` — developer command façade for build/dev/publish and the Reliability Lab. It invokes Go, pnpm, Docker, and compiled binaries. **Operationally important.**
 - `Dockerfile` — production analytics build: Node dashboard stage, CGO Go stage, Alpine runtime. **Risk:** changing paths, CGO packages, or volume variables can produce a healthy-looking image with no persistence/UI.
 - `docker-compose.yml` — one analytics service, host port `8081`, and a bind mount at `../files/iris-data`. **Contradiction:** README says `./data/iris.db`; compose intentionally changed to a sibling path in commit `a78a5ee`.
 - `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml` — JS workspace and shared testing/build tools. Root `npm test` is deliberately a failing placeholder; use named scripts.
 - `go.mod`, `go.sum` — Go 1.22 contract and two direct dependencies.
 - `.github/workflows/ci.yml` — only CI automation. There is no repository deployment workflow.
-- `.env` — local ignored configuration. It contains the three active runtime variables plus two obsolete CORS allowlist names. Values are intentionally not documented.
+- `.env` — local ignored configuration. Treat its values as private and use the
+  public README as the runtime-variable reference.
 - `.gitignore`, `.dockerignore` — exclude secrets, DBs, build output, reliability artifacts, and monorepo components from analytics image context.
-- `iris_architecture.md` — 2026-02-21 summary. It predates batching, daily visitor rotation, reliability lab, current dashboard, and new APIs. It also contains stale absolute `file://` links.
+- `iris_architecture.md` — concise current architecture map pointing to the v2
+  data reference and evidence handbook.
 - `AGENTS.md` — AI contribution conventions, not runtime behavior.
 
 ### `cmd/`
@@ -106,7 +113,9 @@ flowchart TB
 - `pkg/core/event.go` — all event/response DTOs and `EventRepository`. Framework independent, but not a behavioral domain model.
 - `pkg/api/handler.go` — all HTTP parsing, server-owned fields, simple validation, trend calculation, error mapping, and repository invocation. **Risky:** all public contracts converge here.
 - `pkg/api/cors.go` — origin reflection/wildcard behavior applied separately to every API route. **Security critical.**
-- `pkg/db/sqlite.go` — schema bootstrap, inserts, transaction for batch, lab-only page-growth controls. **Risky:** schema changes occur implicitly on startup with no versioning.
+- `pkg/db/sqlite.go` — WAL connection topology, inserts, batch transactions, and lab-only page-growth controls.
+- `pkg/db/migrate.go`, `pkg/db/migrations/` — embedded, versioned schema migrations and legacy-event upgrade.
+- `pkg/db/projector.go`, `retention.go` — checkpointed sessions/daily projections and per-site retention maintenance.
 - `pkg/db/query.go` — every analytics definition, including time filters, site fallback, referrer normalization, P75, Core Web Vitals scoring, and sorting. **Highest business-semantics risk.**
 - `pkg/api/*_test.go`, `pkg/db/query_test.go` — aggregation, date, trend, and CORS tests. Handler ingestion itself is not directly tested.
 
@@ -169,13 +178,16 @@ flowchart TB
 1. Container starts `./iris-server` (`Dockerfile:46`).
 2. `main()` reads `PORT` and `DB_PATH` with defaults (`cmd/server/main.go:15-18`).
 3. It always creates a relative directory named `data`, **not the parent of `DB_PATH`** (`:19-21`). A custom path whose parent does not exist can still fail later.
-4. `NewSqliteDB` calls `sql.Open` and executes `CREATE TABLE/INDEX IF NOT EXISTS` (`pkg/db/sqlite.go:45-74`). `sql.Open` is lazy, but schema execution forces access.
+4. `NewSqliteDB` opens a one-connection writer, applies embedded versioned
+   migrations, then opens a four-connection read pool. Both use WAL, foreign
+   keys, `NORMAL` synchronous mode, and a five-second busy timeout.
 5. Optional lab page-count PRAGMAs are applied only when `IRIS_LAB_PPROF=1`.
 6. A concrete repository is injected behind `core.EventRepository` into `api.Handler`.
 7. A fresh `http.ServeMux` registers 17 API paths, optional pprof, and `/` static files (`cmd/server/main.go:44-73`).
-8. `http.ListenAndServe` starts a default server without read/write/idle/header timeouts (`:75-77`).
-9. Initialization errors call `log.Fatal`, exiting non-zero. There is no retry/readiness state.
-10. Normal cleanup is only deferred `db.Close`; `log.Fatal`/process signals do not execute deferred functions. There is no signal handler, `Server.Shutdown`, request draining, or explicit transaction shutdown.
+8. A signal-aware context starts the in-process projection/retention loop and an
+   explicit `http.Server` with read/header/write/idle timeouts.
+9. SIGINT/SIGTERM trigger a bounded graceful HTTP shutdown. Initialization
+   errors still call `log.Fatal`, and no readiness endpoint or startup retry exists.
 
 ### Development startup
 
@@ -201,7 +213,9 @@ flowchart TB
 
 ### No entry points found
 
-There is no production worker, background-job process, scheduler/cron, migration command, seeder, webhook consumer, application CLI, SSR server, queue consumer, or cache process.
+There is no separate worker process, external scheduler/cron, migration command,
+seeder, webhook consumer, application CLI, SSR server, queue consumer, or cache.
+Projection and retention are scheduled inside the server process.
 
 ## Dependency rationale
 
@@ -209,9 +223,9 @@ There is no production worker, background-job process, scheduler/cron, migration
 
 | Dependency | Where/why | Failure/lock-in/upgrade notes |
 |---|---|---|
-| Go standard `net/http`, `database/sql` | Server/routing/concurrency/DB abstraction | Essential; low lock-in. Default server settings are currently underconfigured. |
+| Go standard `net/http`, `database/sql` | Server/routing/concurrency/DB abstraction | Essential; low lock-in. Explicit HTTP timeouts and bounded SQLite pools are configured. |
 | `mattn/go-sqlite3` | SQLite driver (`pkg/db/sqlite.go`) | Essential; CGO toolchain and platform-specific build dependency. SQLite semantics are architectural lock-in until repository/query changes. |
-| `google/uuid` | Server IDs for each accepted event | Replaceable; no client idempotency because the server always generates a new ID. |
+| `google/uuid` | Legacy/test dependency | Current SDK supplies the unique event ID used for idempotent insertion. |
 | React/ReactDOM 18 | Dashboard client rendering | Replaceable but broad UI rewrite; no SSR. |
 | Recharts | Overview/custom-event charts | Source of much of the 586 kB dashboard bundle; replaceable. |
 | date-fns | date windows/labels | Replaceable; timezone formatting participates in query semantics. |

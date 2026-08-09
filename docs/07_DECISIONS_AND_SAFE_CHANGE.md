@@ -21,38 +21,54 @@ No formal ADR files were found. `iris_architecture.md` records architecture as a
 - **Assessment/revisit:** still sensible. Revisit framework only if routing/middleware complexity demonstrably grows; split services only for measured scaling/ownership boundaries.
 - **Questions for formal ADR:** expected endpoint count, team skills, hosting constraints, availability target.
 
-## RADR-002 — SQLite as event store and reporting database
+## RADR-002 — SQLite control plane, event store, and projections
 
 - **Status/date:** accepted, 2026-01-28; confidence high on decision, low on original motivation.
-- **Decision:** embedded SQLite, one `events` table, startup DDL.
-- **Evidence:** commit `66710fe`; `pkg/db/sqlite.go`; Docker volume.
+- **Decision:** embedded SQLite with registered control-plane records, one raw
+  event fact table, rebuildable projections, and versioned migrations.
+- **Evidence:** historical commit `66710fe`; current `pkg/db/sqlite.go`,
+  `migrate.go`, `projector.go`, `retention.go`; Docker volume.
 - **Likely context:** self-hosted single binary with minimal dependencies.
 - **Alternatives:** Postgres, ClickHouse, embedded analytics DB, append log + aggregates.
 - **Benefits:** zero database service, transactional batch, portable file/backups, low cost.
-- **Costs:** single-writer contention, one-node state, scan growth, migration/backup burden. Baseline confirms lock failures at 500 single writes/s.
+- **Costs:** single-writer throughput, one-node state, raw-scan growth, and backup
+  burden. The historical baseline confirmed lock failures before WAL and the
+  serialized writer; current capacity requires a new comparable baseline.
 - **Security:** filesystem/backup permissions become DB security.
-- **Assessment:** appropriate for early self-hosted scope, underconfigured operationally.
-- **Revisit trigger:** multi-replica requirement, database beyond supported envelope, sustained contention after WAL/pool/index/retention work, managed multi-tenant service.
+- **Assessment:** appropriate for self-hosted scope. WAL, busy timeout, bounded
+  pools, indexes, retention, and checkpointed projections now establish the
+  intended operating model.
+- **Revisit trigger:** multi-replica ingestion, bounded projection lag no longer
+  achievable, or long-range/ad-hoc analytical queries missing goals at measured scale.
 
-## RADR-003 — One append-only generic event table
+## RADR-003 — Raw generic event fact plus rebuildable projections
 
 - **Status/date:** accepted, 2026-01-28 and evolved; confidence medium.
-- **Decision:** system/custom/vital events share one row shape; properties JSON text.
-- **Evidence:** `core.Event`, schema, all queries.
+- **Decision:** system/custom/vital events share one append-only raw shape with
+  typed common dimensions and JSON properties. Sessions and daily metrics are
+  derived, checkpointed tables.
+- **Evidence:** `core.Event`, `001_v2_schema.sql`, `projector.go`.
 - **Plausible reason:** flexible SDK/event evolution without per-event migrations.
-- **Trade-offs:** simple ingestion and new custom events; weak constraints/types, repeated strings, expensive aggregates, privacy risk, no site relations.
-- **Assessment:** reasonable event-log start; needs schema/version/retention/site metadata around it before scale/security.
-- **Revisit trigger:** frequent JSON querying, validation requirements, large scans, retention tiers, registered entities.
+- **Trade-offs:** flexible ingestion and replayable metrics; raw scans and JSON
+  queries remain expensive, while projections add lag/version/rebuild concerns.
+- **Assessment:** current target architecture. Registered sites, constraints,
+  schema versions, URL minimization, and retention now surround the raw fact.
+- **Revisit trigger:** frequent arbitrary JSON segmentation, very large scans, or
+  projection lag exceeding the SQLite envelope.
 
 ## RADR-004 — Browser-owned anonymous visitor/session IDs
 
 - **Status/date:** accepted; daily rotation added 2026-03-25 in `5ed4028`.
-- **Decision:** localStorage visitor ID rotates per UTC day; sessionStorage ID; memory fallback.
+- **Decision:** a per-site `localStorage` visitor ID rotates at midnight in the
+  configured site timezone. A per-site, same-origin `localStorage` session ID
+  rolls after 30 minutes of tracked inactivity; storage failures use memory fallback.
 - **Evidence:** `web/src/storage.ts`; README/privacy docs.
 - **Recorded motivation:** commit/package description and comments explicitly describe daily rotation/privacy.
 - **Alternatives:** cookies, server/IP fingerprint, no ID, longer-lived pseudonym, timed sessions.
 - **Benefits:** no cookies; simple distinct counts; no IP/user-agent logic.
-- **Costs:** multi-day uniqueness inflation, storage clearing/privacy variability, tab semantics, duplicated-tab failure; localStorage is still client tracking state.
+- **Costs:** multi-day uniqueness inflation, storage clearing/privacy variability,
+  activity-based expiration races, and client-controlled identity; localStorage
+  remains tracking state accessible to same-origin scripts.
 - **Assessment:** coherent privacy/product trade-off only if metrics are named/documented precisely.
 - **Revisit trigger:** product requires range-level users/cohorts/true sessions or legal/privacy review changes.
 
@@ -65,28 +81,36 @@ No formal ADR files were found. `iris_architecture.md` records architecture as a
 - **Benefits:** off critical path, tiny client, improved throughput with batching.
 - **Costs:** does not observe acceptance; ignores Beacon false; queue removed before success; duplicate/loss ambiguity.
 - **Evidence assessment:** committed browser failures prove consequences.
-- **Current assessment:** insufficient for a “trustworthy” analytics contract; roadmap correctly proposes idempotent at-least-once where browser permits.
+- **Current assessment:** server IDs are now idempotent, but the volatile SDK
+  queue does not retry. Durable/retry-aware delivery remains before a trustworthy
+  at-least-once contract is possible where browsers permit it.
 - **Revisit:** now, before v0.3.
 
-## RADR-006 — Server assigns event ID and ingestion timestamp
+## RADR-006 — Client event identity/time plus server receive time
 
-- **Status/date:** accepted 2026-01-28; confidence medium.
-- **Decision:** overwrite client ID/time.
-- **Likely reason:** trust server authority and avoid malformed/missing fields.
-- **Benefits:** canonical UUID and UTC ingestion time.
-- **Costs:** cannot deduplicate retries or measure occurrence/delivery delay; historical replay changes time.
-- **Assessment:** keep receive time but add stable client event ID and occurrence time/schema/SDK version as separate fields.
+- **Status/date:** original server-owned model replaced by v2 in 2026-08.
+- **Decision:** require a stable client event ID and occurrence time, record server
+  receive time separately, and version both the wire schema and producing SDK.
+- **Benefits:** retry-safe insert, replayable occurrence semantics, and measurable
+  delivery delay.
+- **Costs:** client clock and ID quality require validation; receive time remains
+  authoritative for operational timing.
+- **Assessment:** accepted. Current schema version is 1 and future versions must
+  be explicit migrations/contracts.
 
-## RADR-007 — Site/domain compatibility without site registry
+## RADR-007 — Registered sites and hostname allowlists
 
-- **Status/date:** evolved 2026-02-22; confidence medium.
-- **Decision:** aggregate by site ID, fall back/match legacy domain, infer site list from events.
-- **Evidence:** commits `a202fa6`, `990bd32`, current `siteMatchClause/GetSites`, tests.
-- **Plausible context:** preserve early domain-keyed data while introducing multi-domain logical sites.
-- **Benefits:** backwards compatibility/no setup.
-- **Costs:** weak tenancy, forged sites, ambiguous domain/site matches, impossible authorization.
-- **Assessment:** useful transitional compatibility, not a permanent tenant model.
-- **Revisit:** site registration/auth implementation; formal data migration required.
+- **Status/date:** original inferred-site model replaced by v2 in 2026-08.
+- **Decision:** sites and domains are control-plane records. Ingestion requires a
+  registered site and matching URL hostname. Site mutation requires the
+  `IRIS_ADMIN_TOKEN`; reads and ingestion remain unauthenticated.
+- **Evidence:** `sites.go`, `ingest.go`, migration 001, API tests.
+- **Benefits:** explicit lifecycle/configuration, domain integrity, timezone and
+  retention ownership, and a protected mutation surface.
+- **Costs:** setup is mandatory; hostname allowlisting is not browser
+  authentication or analytics-read authorization.
+- **Assessment:** accepted foundation. Next security boundary is scoped ingest
+  credentials and authenticated site reads.
 
 ## RADR-008 — Same-origin React/Vite dashboard bundled with server
 
@@ -162,8 +186,8 @@ No formal ADR files were found. `iris_architecture.md` records architecture as a
 ### Add a database field to `events`
 
 1. Define nullability/default/backfill, old binary compatibility, privacy/retention, index need.
-2. Introduce versioned migration infrastructure first; editing `CREATE TABLE IF NOT EXISTS` is not an upgrade.
-3. Update schema migration, `core.Event`, insertion SQL/args, lab stored-event verification/manifests, query code, SDK wire contract if applicable.
+2. Add the next embedded numbered migration; never edit an applied migration.
+3. Update `core.Event`, insertion SQL/args, lab stored-event verification/manifests, query code, SDK wire contract if applicable.
 4. Test fresh DB, old snapshot upgrade, partial failure, backup/restore, and downgrade policy.
 5. Deploy migration with backup and single-writer control. Prefer expand/contract if old/new binaries overlap.
 
@@ -183,7 +207,10 @@ Define owner and relationships; use foreign keys only after confirming enabling 
 
 ### Add a background job
 
-There is no worker framework. First ADR should decide in-process goroutine vs separate command/process, durable state, leader election, retries/idempotency, shutdown, observability. Add an entry point only after defining at-least-once semantics. A timer goroutine in `main` is acceptable only for noncritical single-instance work with documented duplication/loss behavior.
+Projection and retention already use a signal-aware in-process maintenance loop
+and serialized writer. New jobs must define durable state, retry/idempotency,
+shutdown, observability, and interaction with that writer. A separate process or
+leader election is required before multi-replica scheduling.
 
 ### Add an external integration
 
@@ -211,10 +238,10 @@ Write it in plain language with examples/edge cases/timezone/tenant scope. Decid
 |---|---|---|---|
 | Authentication and site authorization | before public dashboard | built-in local auth, OIDC, trusted reverse proxy; self-host UX, recovery, tenant isolation | schema/API high cost; delaying leaves critical exposure |
 | Ingestion authentication/origin model | before trusted analytics | public site key, signed token, allowlisted origin, server proxy; spoof resistance vs browser-secret limits | moderate; pretending browser key is secret is risky |
-| Event delivery/idempotency contract | v0.3 | client event ID, durable queue, retry matrix; measured loss/duplication | schema/protocol change; must decide before stable API |
-| Versioned schema migrations | next schema change | embedded Go migrator vs external tool; locking/rollback/old snapshots | choice replaceable, migration history not |
-| SQLite runtime tuning | after compatible baselines | WAL, busy timeout, connection bounds, synchronous level | reversible PRAGMAs, but durability trade-offs require evidence |
-| Time/visitor/session semantics | before metric claims | UTC/site timezone; daily vs range visitors; timed vs tab session | metric history hard to change; collect user requirements |
+| Browser delivery guarantees | next SDK reliability work | IndexedDB queue, retry matrix, Beacon fallback; measured loss | client behavior/release compatibility |
+| Migration lifecycle | next schema change | forward-only policy, backup/restore, downgrade compatibility | migration history is permanent |
+| SQLite capacity envelope | after compatible baselines | current WAL/writer/read-pool/projection settings | measured results drive ClickHouse trigger |
+| Time/visitor/session semantics | before stronger identity claims | site-local reports, daily visitor, 30-minute activity session | metric history hard to change |
 | URL/property privacy policy | before broad use | path-only default, query allowlist, redaction hooks, click opt-in | safer defaults may break desired attribution; early is better |
 | Retention/export/deletion | before valuable/regulated data | global/site TTL, partitions/archive, operator APIs | late cleanup is expensive |
 | Supported deployment envelope | after full tests | single container/volume, external Postgres mode, managed offering | keep narrow until demand |
