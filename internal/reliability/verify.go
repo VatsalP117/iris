@@ -517,6 +517,7 @@ func verifyDateWindows(ctx context.Context, config Config) []AggregateCheck {
 	defer database.Close()
 
 	siteID := config.SiteID + "-date-window"
+	domain := domainForSite(siteID)
 	now := time.Now().UTC().UnixMicro()
 	if _, err := database.ExecContext(ctx, `
 		INSERT OR IGNORE INTO sites(id, name, timezone, retention_days, created_at_us)
@@ -548,8 +549,8 @@ func verifyDateWindows(ctx context.Context, config Config) []AggregateCheck {
 			occurredAt.UnixMicro(),
 			occurredAt.UnixMicro(),
 			timestamp,
-			fmt.Sprintf("https://%s/date-%d", defaultDomain, index),
-			defaultDomain,
+			fmt.Sprintf("https://%s/date-%d", domain, index),
+			domain,
 			fmt.Sprintf("/date-%d", index),
 			fmt.Sprintf("date-session-%d", index),
 			fmt.Sprintf("date-visitor-%d", index),

@@ -261,10 +261,15 @@ func TestRunSupportsDeterministicRateStages(t *testing.T) {
 func registerLabSite(t *testing.T, repo *db.SqliteRepository, siteID string) {
 	t.Helper()
 	if err := repo.CreateSite(context.Background(), &core.Site{
-		ID: siteID, Name: siteID, Domains: []string{"lab.example"},
+		ID: siteID, Name: siteID, Domains: []string{domainForSiteForTest(siteID)},
 	}); err != nil {
 		t.Fatalf("CreateSite returned error: %v", err)
 	}
+}
+
+func domainForSiteForTest(siteID string) string {
+	manifest := reliability.BuildManifest("domain-fixture", siteID, 1)
+	return manifest[0].Event.Domain
 }
 
 func TestCompareReportsDetectsRegressionsAndConfigMismatch(t *testing.T) {

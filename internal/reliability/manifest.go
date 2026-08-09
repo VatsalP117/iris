@@ -61,13 +61,14 @@ func buildEvent(runID, siteID string, sequence int) PlannedEvent {
 		properties["$rating"] = "good"
 	}
 
+	domain := domainForSite(siteID)
 	return PlannedEvent{
 		Sequence: sequence,
 		Event: core.Event{
 			ID:            fmt.Sprintf("%s-%06d", runID, sequence),
 			EventName:     eventName,
-			URL:           "https://" + defaultDomain + page,
-			Domain:        defaultDomain,
+			URL:           "https://" + domain + page,
+			Domain:        domain,
 			Referrer:      labReferrers[sequence%len(labReferrers)],
 			ScreenWidth:   labWidths[sequence%len(labWidths)],
 			SiteID:        siteID,
