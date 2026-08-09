@@ -16,6 +16,8 @@ export interface BatchConfig {
 export interface IrisConfig {
   host: string;
   siteId: string;
+  /** Must match the registered site's IANA timezone. Default: UTC */
+  timezone?: string;
   autocapture?: AutocaptureConfig | false;
   batching?: BatchConfig;
   debug?: boolean;

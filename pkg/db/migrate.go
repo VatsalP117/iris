@@ -143,7 +143,7 @@ func isLegacyEventsTable(ctx context.Context, tx *sql.Tx) (bool, error) {
 type legacyEvent struct {
 	id, name, rawURL, domain, referrer, siteID, sessionID, visitorID, properties string
 	screenWidth                                                                  int
-	timestamp                                                                    time.Time
+	timestamp                                                                    string
 }
 
 func migrateLegacyEvents(ctx context.Context, tx *sql.Tx) error {
@@ -151,7 +151,7 @@ func migrateLegacyEvents(ctx context.Context, tx *sql.Tx) error {
 		SELECT id, COALESCE(event_name, ''), COALESCE(url, ''), COALESCE(domain, ''),
 		       COALESCE(referrer, ''), COALESCE(screen_width, 0), COALESCE(site_id, ''),
 		       COALESCE(session_id, ''), COALESCE(visitor_id, ''), COALESCE(properties, '{}'),
-		       timestamp
+		       COALESCE(datetime(timestamp), CURRENT_TIMESTAMP)
 		FROM legacy_events
 		ORDER BY timestamp, id
 	`)
@@ -218,8 +218,13 @@ func migrateLegacyEvents(ctx context.Context, tx *sql.Tx) error {
 	}
 
 	for _, event := range events {
-		pathname, referrerHost := legacyURLParts(event.rawURL, event.referrer)
-		timestamp := event.timestamp.UTC()
+		normalizedURL, pathname, normalizedReferrer, referrerHost := legacyURLParts(
+			event.rawURL, event.referrer,
+		)
+		timestamp, err := time.ParseInLocation("2006-01-02 15:04:05", event.timestamp, time.UTC)
+		if err != nil {
+			timestamp = time.Now().UTC()
+		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO events(
 				id, event_name, site_id, occurred_at_us, received_at_us, timestamp,
@@ -228,7 +233,7 @@ func migrateLegacyEvents(ctx context.Context, tx *sql.Tx) error {
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, '')
 		`,
 			event.id, event.name, event.siteID, timestamp.UnixMicro(), timestamp.UnixMicro(), timestamp,
-			event.rawURL, event.domain, pathname, event.referrer, referrerHost, event.screenWidth,
+			normalizedURL, event.domain, pathname, normalizedReferrer, referrerHost, event.screenWidth,
 			event.sessionID, event.visitorID, event.properties,
 		); err != nil {
 			return err
@@ -237,14 +242,29 @@ func migrateLegacyEvents(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
-func legacyURLParts(rawURL, rawReferrer string) (string, string) {
-	pathname := "/"
-	if parsed, err := url.Parse(rawURL); err == nil && parsed.Path != "" {
-		pathname = parsed.EscapedPath()
+func legacyURLParts(rawURL, rawReferrer string) (string, string, string, string) {
+	normalizedURL, pathname, _ := sanitizeLegacyURL(rawURL)
+	normalizedReferrer, _, referrerHost := sanitizeLegacyURL(rawReferrer)
+	referrerHost = strings.TrimPrefix(referrerHost, "www.")
+	return normalizedURL, pathname, normalizedReferrer, referrerHost
+}
+
+func sanitizeLegacyURL(raw string) (string, string, string) {
+	if raw == "" {
+		return "", "/", ""
 	}
-	referrerHost := ""
-	if parsed, err := url.Parse(rawReferrer); err == nil {
-		referrerHost = strings.TrimPrefix(strings.ToLower(parsed.Hostname()), "www.")
+	parsed, err := url.Parse(raw)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") ||
+		parsed.Hostname() == "" || parsed.User != nil {
+		return "", "/", ""
 	}
-	return pathname, referrerHost
+	parsed.Scheme = strings.ToLower(parsed.Scheme)
+	parsed.Host = strings.ToLower(parsed.Host)
+	parsed.RawQuery = ""
+	parsed.ForceQuery = false
+	parsed.Fragment = ""
+	if parsed.Path == "" {
+		parsed.Path = "/"
+	}
+	return parsed.String(), parsed.EscapedPath(), parsed.Hostname()
 }

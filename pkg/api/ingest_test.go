@@ -87,10 +87,18 @@ func TestTrackEvent_RejectsUnknownSiteAndDisallowedDomain(t *testing.T) {
 			body:   `{"id":"event-2","n":"$pageview","u":"https://evil.example/","s":"site-a","sid":"s","vid":"v"}`,
 			status: http.StatusForbidden,
 		},
+		{
+			name:   "mismatched browser origin",
+			body:   `{"id":"event-3","n":"$pageview","u":"https://example.com/","s":"site-a","sid":"s","vid":"v"}`,
+			status: http.StatusForbidden,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "/api/event", strings.NewReader(test.body))
+			if test.name == "mismatched browser origin" {
+				request.Header.Set("Origin", "https://evil.example")
+			}
 			response := httptest.NewRecorder()
 			handler.TrackEvent(response, request)
 			if response.Code != test.status {

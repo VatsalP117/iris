@@ -14,8 +14,11 @@ func (r *SqliteRepository) GetSystemStatus(ctx context.Context) (*core.SystemSta
 	if err := r.db.QueryRowContext(ctx, `
 		SELECT
 			COALESCE((SELECT last_seq FROM projection_checkpoints WHERE name = ?), 0),
+			COALESCE((SELECT version FROM projection_checkpoints WHERE name = ?), 0),
 			COALESCE((SELECT MAX(seq) FROM events), 0)
-	`, analyticsProjectionName).Scan(&status.ProjectionLastSeq, &status.EventLastSeq); err != nil {
+	`, analyticsProjectionName, analyticsProjectionName).Scan(
+		&status.ProjectionLastSeq, &status.ProjectionVersion, &status.EventLastSeq,
+	); err != nil {
 		return nil, err
 	}
 	status.ProjectionLag = status.EventLastSeq - status.ProjectionLastSeq

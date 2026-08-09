@@ -34,7 +34,10 @@ func (r *SqliteRepository) CreateSite(ctx context.Context, site *core.Site) erro
 		retentionDays = 365
 	}
 
-	domains := normalizedDomains(site.Domains)
+	domains, err := normalizedDomains(site.Domains)
+	if err != nil {
+		return err
+	}
 	if len(domains) == 0 {
 		return fmt.Errorf("at least one domain is required")
 	}
@@ -44,6 +47,18 @@ func (r *SqliteRepository) CreateSite(ctx context.Context, site *core.Site) erro
 		return err
 	}
 	defer tx.Rollback()
+	var existingTimezone string
+	var hasEvents int
+	err = tx.QueryRowContext(ctx, `
+		SELECT timezone, EXISTS(SELECT 1 FROM events WHERE site_id = sites.id LIMIT 1)
+		FROM sites WHERE id = ?
+	`, siteID).Scan(&existingTimezone, &hasEvents)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if err == nil && hasEvents == 1 && existingTimezone != timezone {
+		return fmt.Errorf("%w: %s uses %s", core.ErrTimezoneImmutable, siteID, existingTimezone)
+	}
 
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO sites(id, name, timezone, retention_days, created_at_us)
@@ -92,7 +107,7 @@ func (r *SqliteRepository) ValidateSite(ctx context.Context, siteID, domain stri
 	return err
 }
 
-func normalizedDomains(domains []string) []string {
+func normalizedDomains(domains []string) ([]string, error) {
 	seen := map[string]struct{}{}
 	result := make([]string, 0, len(domains))
 	for _, domain := range domains {
@@ -101,13 +116,34 @@ func normalizedDomains(domains []string) []string {
 		if domain == "" {
 			continue
 		}
+		if err := validateHostname(domain); err != nil {
+			return nil, err
+		}
 		if _, ok := seen[domain]; ok {
 			continue
 		}
 		seen[domain] = struct{}{}
 		result = append(result, domain)
 	}
-	return result
+	return result, nil
+}
+
+func validateHostname(hostname string) error {
+	if len(hostname) > 253 || strings.ContainsAny(hostname, " /:@*?#\t\r\n") {
+		return fmt.Errorf("invalid hostname %q", hostname)
+	}
+	for _, label := range strings.Split(hostname, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return fmt.Errorf("invalid hostname %q", hostname)
+		}
+		for _, character := range label {
+			if (character < 'a' || character > 'z') &&
+				(character < '0' || character > '9') && character != '-' {
+				return fmt.Errorf("invalid hostname %q", hostname)
+			}
+		}
+	}
+	return nil
 }
 
 func boolToInt(value bool) int {

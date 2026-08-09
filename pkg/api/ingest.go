@@ -17,7 +17,12 @@ const (
 	maxFutureClockSkew  = 5 * time.Minute
 )
 
-func (h *Handler) prepareIncomingEvent(ctx context.Context, event *core.Event, receivedAt time.Time) error {
+func (h *Handler) prepareIncomingEvent(
+	ctx context.Context,
+	event *core.Event,
+	receivedAt time.Time,
+	origin string,
+) error {
 	event.ID = strings.TrimSpace(event.ID)
 	event.EventName = strings.TrimSpace(event.EventName)
 	event.SiteID = strings.TrimSpace(event.SiteID)
@@ -59,6 +64,13 @@ func (h *Handler) prepareIncomingEvent(ctx context.Context, event *core.Event, r
 	event.Pathname = parsedURL.EscapedPath()
 	if event.Pathname == "" {
 		event.Pathname = "/"
+	}
+	if origin = strings.TrimSpace(origin); origin != "" {
+		parsedOrigin, parseErr := url.Parse(origin)
+		if parseErr != nil || (parsedOrigin.Scheme != "http" && parsedOrigin.Scheme != "https") ||
+			strings.ToLower(parsedOrigin.Hostname()) != event.Domain {
+			return fmt.Errorf("%w: request origin does not match event domain", core.ErrDomainNotAllowed)
+		}
 	}
 
 	if event.Referrer != "" {

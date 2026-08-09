@@ -68,7 +68,9 @@ func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.prepareIncomingEvent(r.Context(), &event, time.Now().UTC()); err != nil {
+	if err := h.prepareIncomingEvent(
+		r.Context(), &event, time.Now().UTC(), r.Header.Get("Origin"),
+	); err != nil {
 		writeIngestError(w, err)
 		return
 	}
@@ -112,7 +114,7 @@ func (h *Handler) TrackBatchEvents(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	ptrs := make([]*core.Event, len(events))
 	for i := range events {
-		if err := h.prepareIncomingEvent(r.Context(), &events[i], now); err != nil {
+		if err := h.prepareIncomingEvent(r.Context(), &events[i], now, r.Header.Get("Origin")); err != nil {
 			writeIngestError(w, fmt.Errorf("event %d: %w", i, err))
 			return
 		}

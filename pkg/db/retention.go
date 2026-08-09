@@ -11,7 +11,7 @@ import (
 func (r *SqliteRepository) ApplyRetention(ctx context.Context, now time.Time) (int64, error) {
 	now = now.UTC()
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, retention_days FROM sites WHERE disabled_at_us IS NULL
+		SELECT id, retention_days FROM sites
 	`)
 	if err != nil {
 		return 0, err
@@ -42,6 +42,26 @@ func (r *SqliteRepository) ApplyRetention(ctx context.Context, now time.Time) (i
 
 	var deletedEvents int64
 	for _, item := range policies {
+		boundaryRows, err := tx.QueryContext(ctx, `
+			SELECT session_id FROM sessions
+			WHERE site_id = ? AND started_at_us < ? AND ended_at_us >= ?
+		`, item.siteID, item.cutoff.UnixMicro(), item.cutoff.UnixMicro())
+		if err != nil {
+			return 0, fmt.Errorf("read boundary sessions for site %s: %w", item.siteID, err)
+		}
+		var boundarySessions []string
+		for boundaryRows.Next() {
+			var sessionID string
+			if err := boundaryRows.Scan(&sessionID); err != nil {
+				boundaryRows.Close()
+				return 0, err
+			}
+			boundarySessions = append(boundarySessions, sessionID)
+		}
+		if err := boundaryRows.Close(); err != nil {
+			return 0, err
+		}
+
 		result, err := tx.ExecContext(ctx, `
 			DELETE FROM events WHERE site_id = ? AND occurred_at_us < ?
 		`, item.siteID, item.cutoff.UnixMicro())
@@ -69,6 +89,15 @@ func (r *SqliteRepository) ApplyRetention(ctx context.Context, now time.Time) (i
 		for _, deletion := range deletions {
 			if _, err := tx.ExecContext(ctx, deletion.statement, item.siteID, deletion.cutoff); err != nil {
 				return 0, fmt.Errorf("delete expired projections for site %s: %w", item.siteID, err)
+			}
+		}
+		var throughSeq int64
+		if err := tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(seq), 0) FROM events").Scan(&throughSeq); err != nil {
+			return 0, err
+		}
+		for _, sessionID := range boundarySessions {
+			if err := rebuildSession(ctx, tx, item.siteID, sessionID, throughSeq); err != nil {
+				return 0, fmt.Errorf("rebuild retained session %s: %w", sessionID, err)
 			}
 		}
 	}

@@ -48,6 +48,16 @@ func main() {
 			log.Fatalf("Unknown command %q", os.Args[1])
 		}
 	}
+	if _, err := sqliteRepo.ProjectPending(context.Background(), 1000); err != nil {
+		if errors.Is(err, db.ErrProjectionVersionMismatch) {
+			log.Printf("Iris projection version changed; rebuilding derived analytics")
+			if rebuildErr := sqliteRepo.RebuildProjections(context.Background()); rebuildErr != nil {
+				log.Fatalf("Failed to rebuild stale projections: %v", rebuildErr)
+			}
+		} else {
+			log.Fatalf("Failed to initialize analytics projections: %v", err)
+		}
+	}
 	if os.Getenv("IRIS_LAB_PPROF") == "1" {
 		if rawExtraPages := os.Getenv("IRIS_LAB_DB_EXTRA_PAGES"); rawExtraPages != "" {
 			extraPages, parseErr := strconv.Atoi(rawExtraPages)

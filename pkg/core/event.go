@@ -7,8 +7,9 @@ import (
 )
 
 var (
-	ErrSiteNotFound     = errors.New("site not found")
-	ErrDomainNotAllowed = errors.New("domain not allowed")
+	ErrSiteNotFound      = errors.New("site not found")
+	ErrDomainNotAllowed  = errors.New("domain not allowed")
+	ErrTimezoneImmutable = errors.New("site timezone cannot change after events are stored")
 )
 
 type Event struct {
@@ -42,6 +43,7 @@ type Site struct {
 type SystemStatus struct {
 	Database          string `json:"database"`
 	ProjectionLastSeq int64  `json:"projection_last_seq"`
+	ProjectionVersion int    `json:"projection_version"`
 	EventLastSeq      int64  `json:"event_last_seq"`
 	ProjectionLag     int64  `json:"projection_lag"`
 }

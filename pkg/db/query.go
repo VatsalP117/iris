@@ -88,7 +88,8 @@ func (r *SqliteRepository) projectionDayWindow(
 	if err != nil {
 		return "", nil, false, err
 	}
-	if status.EventLastSeq == 0 || status.ProjectionLag != 0 {
+	if status.EventLastSeq == 0 || status.ProjectionLag != 0 ||
+		status.ProjectionVersion != analyticsProjectionVersion {
 		return "", nil, false, nil
 	}
 	clause := ""

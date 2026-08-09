@@ -61,6 +61,10 @@ func TestNewSqliteDB_MigratesLegacyEvents(t *testing.T) {
 			'example.com', 'https://google.com/search?q=iris', 1440, 'site-a',
 			'session-a', 'visitor-a', '{}', '2026-08-01 12:00:00'
 		);
+		INSERT INTO events VALUES (
+			'legacy-null-time', '$pageview', 'https://example.com/null?secret=1',
+			'example.com', '', 1440, 'site-a', 'session-b', 'visitor-b', '{}', NULL
+		);
 	`)
 	if err != nil {
 		t.Fatalf("create legacy schema: %v", err)
@@ -79,21 +83,32 @@ func TestNewSqliteDB_MigratesLegacyEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetStats returned error: %v", err)
 	}
-	if stats.Pageviews != 1 {
-		t.Fatalf("migrated pageviews = %d, want 1", stats.Pageviews)
+	if stats.Pageviews != 2 {
+		t.Fatalf("migrated pageviews = %d, want 2", stats.Pageviews)
 	}
 
-	var pathname, referrerHost string
+	var trackedURL, pathname, referrer, referrerHost string
 	var occurredAt int64
 	if err := repo.db.QueryRow(`
-		SELECT pathname, referrer_host, occurred_at_us FROM events WHERE id = 'legacy-event'
-	`).Scan(&pathname, &referrerHost, &occurredAt); err != nil {
+		SELECT url, pathname, referrer, referrer_host, occurred_at_us
+		FROM events WHERE id = 'legacy-event'
+	`).Scan(&trackedURL, &pathname, &referrer, &referrerHost, &occurredAt); err != nil {
 		t.Fatalf("read migrated event: %v", err)
 	}
-	if pathname != "/pricing" || referrerHost != "google.com" {
-		t.Fatalf("unexpected normalized fields: pathname=%q referrer=%q", pathname, referrerHost)
+	if trackedURL != "https://example.com/pricing" || pathname != "/pricing" ||
+		referrer != "https://google.com/search" || referrerHost != "google.com" {
+		t.Fatalf("unexpected normalized fields: url=%q pathname=%q referrer=%q host=%q",
+			trackedURL, pathname, referrer, referrerHost)
 	}
 	if occurredAt != time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC).UnixMicro() {
 		t.Fatalf("unexpected occurred_at_us: %d", occurredAt)
+	}
+	if err := repo.db.QueryRow(`
+		SELECT occurred_at_us FROM events WHERE id = 'legacy-null-time'
+	`).Scan(&occurredAt); err != nil {
+		t.Fatalf("read null-time migrated event: %v", err)
+	}
+	if occurredAt <= 0 {
+		t.Fatalf("null legacy timestamp did not receive fallback: %d", occurredAt)
 	}
 }
